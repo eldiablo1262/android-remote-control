@@ -67,6 +67,11 @@ app.get('/mobile/:sessionId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
 });
 
+// APK download - redirect to GitHub release (clean download for Android)
+app.get('/download/apk', (req, res) => {
+  res.redirect('https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk');
+});
+
 // Viewer page (control interface on PC)
 app.get('/viewer/:sessionId', (req, res) => {
   const { sessionId } = req.params;

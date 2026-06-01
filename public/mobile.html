@@ -156,18 +156,30 @@
     <h1>Remote Control</h1>
     <p class="subtitle">Configuration du telephone</p>
 
-    <!-- Auto-install progress -->
+    <!-- Auto-install -->
     <div class="card" id="installCard">
-      <h2>Installation en cours...</h2>
+      <h2 id="installTitle">Installation automatique</h2>
+      <p id="installMsg">Le telechargement va commencer...</p>
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      <p id="installStatus" style="margin-top:12px;">Telechargement de l'application...</p>
+    </div>
+
+    <!-- After install: open app button -->
+    <div class="card" id="openAppCard" style="display:none;">
+      <h2 style="color:#00ff88;">App installee ?</h2>
+      <p>Appuyez pour lancer la connexion automatique :</p>
+      <a id="deepLinkBtn" href="#" style="display:block; padding:14px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border-radius:10px; text-decoration:none; text-align:center; font-weight:bold; font-size:1rem; margin-top:12px;">
+        Lancer Remote Control
+      </a>
+      <p style="font-size:0.75rem; color:#555; margin-top:12px;">
+        L'app se connecte automatiquement (rien a configurer).
+      </p>
     </div>
 
     <!-- Status -->
     <div class="card">
       <div class="status-bar">
         <div class="status-dot dot-waiting" id="statusDot"></div>
-        <span class="status-text" id="statusText">En attente...</span>
+        <span class="status-text" id="statusText">En attente de connexion...</span>
       </div>
     </div>
   </div>
@@ -176,7 +188,7 @@
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    const apkUrl = 'https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk';
+    const deepLink = `remotecontrol://connect?server=${encodeURIComponent(location.origin)}&session=${encodeURIComponent(sessionId)}`;
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 
@@ -186,101 +198,42 @@
       if (session.androidConnected) {
         dot.className = 'status-dot dot-connected';
         text.textContent = 'Connecte ! Ouvrez le Viewer sur PC.';
-      } else {
-        dot.className = 'status-dot dot-waiting';
-        text.textContent = 'En attente de connexion de l\'app...';
+        document.getElementById('installCard').style.display = 'none';
+        document.getElementById('openAppCard').style.display = 'none';
       }
     });
 
-    // Auto-download and install APK
-    autoInstall();
+    // Set deep link button
+    document.getElementById('deepLinkBtn').href = deepLink;
 
-    async function autoInstall() {
+    // Auto-trigger APK download via native browser download (not fetch)
+    startDownload();
+
+    function startDownload() {
       const progress = document.getElementById('progressFill');
-      const status = document.getElementById('installStatus');
+      const msg = document.getElementById('installMsg');
 
-      try {
-        // Step 1: Download APK
-        progress.style.width = '10%';
-        status.textContent = 'Telechargement de l\'application...';
+      // Use native download - this works properly on Android
+      progress.style.width = '50%';
+      msg.textContent = 'Telechargement en cours...';
 
-        const response = await fetch(apkUrl);
-        if (!response.ok) throw new Error('Download failed');
+      // Create invisible iframe to trigger download without leaving page
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = '/download/apk';
+      document.body.appendChild(iframe);
 
-        const contentLength = response.headers.get('content-length');
-        const total = parseInt(contentLength) || 0;
-        const reader = response.body.getReader();
-        let received = 0;
-        const chunks = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          if (total > 0) {
-            const pct = Math.round((received / total) * 80) + 10;
-            progress.style.width = pct + '%';
-            status.textContent = `Telechargement... ${Math.round(received / 1024)}KB / ${Math.round(total / 1024)}KB`;
-          }
-        }
-
-        // Step 2: Create blob and trigger install
-        progress.style.width = '90%';
-        status.textContent = 'Preparation de l\'installation...';
-
-        const blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' });
-        const url = URL.createObjectURL(blob);
-
-        // Trigger download/install
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'remote-control.apk';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-
+      // After a few seconds, show next step
+      setTimeout(() => {
         progress.style.width = '100%';
-        status.textContent = 'APK telecharge ! Ouvrez la notification pour installer.';
+        msg.textContent = 'Telechargement lance ! Regardez vos notifications.';
+        document.getElementById('installTitle').textContent = 'APK en cours de telechargement';
+      }, 2000);
 
-        // After download, try to open the app with deep link (auto-connect)
-        const deepLink = `remotecontrol://connect?server=${encodeURIComponent(location.origin)}&session=${encodeURIComponent(sessionId)}`;
-        
-        setTimeout(() => {
-          // Try deep link to auto-open app with config
-          window.location.href = deepLink;
-        }, 2000);
-
-        // Update message after delay
-        setTimeout(() => {
-          document.getElementById('installCard').innerHTML = `
-            <h2 style="color:#00ff88">APK telecharge</h2>
-            <p>Ouvrez la notification pour installer, puis autorisez.</p>
-            <p style="margin-top:12px;">
-              <a href="${deepLink}" style="display:block; padding:12px; background:#667eea; color:#fff; border-radius:8px; text-decoration:none; text-align:center; font-weight:bold;">
-                Ouvrir l'app Remote Control
-              </a>
-            </p>
-            <p style="font-size:0.75rem; color:#555; margin-top:12px;">
-              L'app se connectera automatiquement a cette session.
-            </p>
-          `;
-        }, 4000);
-
-      } catch (err) {
-        // Fallback: direct link
-        progress.style.width = '100%';
-        progress.style.background = '#ff4444';
-        status.innerHTML = `
-          <a href="${apkUrl}" style="color:#667eea; font-size:1rem; font-weight:bold;">
-            Appuyez ici pour telecharger
-          </a>
-          <br><br>
-          <span style="font-size:0.75rem; color:#666;">
-            Puis ouvrez le fichier telecharge pour installer.
-          </span>
-        `;
-      }
+      // Show "open app" button after enough time for install
+      setTimeout(() => {
+        document.getElementById('openAppCard').style.display = 'block';
+      }, 5000);
     }
   </script>
 </body>
