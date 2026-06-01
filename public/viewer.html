@@ -264,9 +264,9 @@
       }
     });
 
-    // Handle JPEG frames from native Android app (via MediaProjection)
+    // Handle frames from native Android app (via MediaProjection or ADB)
     socket.on('screen-frame', ({ frame, timestamp }) => {
-      remoteImage.src = 'data:image/jpeg;base64,' + frame;
+      remoteImage.src = 'data:image/png;base64,' + frame;
       remoteImage.style.display = 'block';
       remoteVideo.style.display = 'none';
       waitingOverlay.style.display = 'none';
