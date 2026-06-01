@@ -3,237 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Remote Control - Configuration</title>
+  <title>Remote Control</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f23;
-      color: #e0e0e0;
-      min-height: 100vh;
-      padding: 20px;
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;overflow:hidden}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:#000;color:#fff;
+      display:flex;align-items:center;justify-content:center;
+      flex-direction:column;
+      touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;
     }
-    .container {
-      max-width: 480px;
-      margin: 0 auto;
+    .screen{
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      padding:30px;text-align:center;
     }
-    h1 {
-      text-align: center;
-      font-size: 1.4rem;
-      color: #667eea;
-      margin-bottom: 6px;
+    .hidden{display:none!important}
+    .btn{
+      width:140px;height:140px;border-radius:50%;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      display:flex;align-items:center;justify-content:center;
+      font-size:3rem;margin-bottom:24px;
+      box-shadow:0 8px 40px rgba(102,126,234,0.5);
+      cursor:pointer;
+      animation:pulse 2s infinite;
     }
-    .subtitle {
-      text-align: center;
-      font-size: 0.85rem;
-      color: #888;
-      margin-bottom: 24px;
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+    .title{font-size:1.2rem;color:#667eea;margin-bottom:10px;font-weight:700}
+    .msg{font-size:1rem;color:#ccc;line-height:1.6;max-width:300px}
+    .sub{font-size:0.75rem;color:#555;margin-top:16px;max-width:280px}
+    .live-dot{
+      width:16px;height:16px;background:#00ff00;border-radius:50%;
+      margin-bottom:16px;animation:blink 1.2s infinite;
     }
-    .card {
-      background: #1a1a2e;
-      border: 1px solid #2a2a4a;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+    .stop{
+      margin-top:30px;padding:12px 30px;
+      border:2px solid #ff4444;background:transparent;
+      color:#ff4444;border-radius:8px;font-size:0.9rem;cursor:pointer;
     }
-    .card h2 {
-      font-size: 1.1rem;
-      color: #fff;
-      margin-bottom: 12px;
-    }
-    .card .num {
-      display: inline-flex;
-      width: 28px; height: 28px;
-      background: #667eea;
-      color: #fff;
-      border-radius: 50%;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.85rem;
-      margin-right: 10px;
-    }
-    .card p {
-      font-size: 0.85rem;
-      color: #aaa;
-      line-height: 1.6;
-      margin-bottom: 10px;
-    }
-    .ws-box {
-      background: #0a0a1a;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 14px;
-      font-family: monospace;
-      font-size: 0.8rem;
-      color: #00ff88;
-      word-break: break-all;
-      margin: 10px 0;
-      cursor: pointer;
-      text-align: center;
-    }
-    .ws-box:active { background: #001a00; }
-    .copy-msg {
-      text-align: center;
-      font-size: 0.7rem;
-      color: #555;
-    }
-    .badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 10px;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-    .badge-green { background: #002d00; color: #00ff88; }
-    .badge-blue { background: #001a3d; color: #5599ff; }
-    .steps-list {
-      list-style: none;
-      padding: 0;
-    }
-    .steps-list li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 14px;
-      font-size: 0.85rem;
-      color: #ccc;
-      line-height: 1.5;
-    }
-    .download-btn {
-      display: block;
-      width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      margin: 12px 0;
-    }
-    .download-btn:active { opacity: 0.8; }
-    .status-bar {
-      background: #0a0a1a;
-      border-radius: 8px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .status-dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      animation: blink 2s infinite;
-    }
-    .dot-waiting { background: #ffd700; }
-    .dot-connected { background: #00ff00; animation: none; }
-    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .status-text { font-size: 0.85rem; color: #aaa; }
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: #0a0a1a;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 12px;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #667eea, #00ff88);
-      border-radius: 4px;
-      width: 0%;
-      transition: width 0.3s;
+    .error{
+      background:#1a0000;border:1px solid #440000;border-radius:8px;
+      padding:14px;margin-top:20px;max-width:300px;
+      font-size:0.8rem;color:#ff8888;line-height:1.5;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Remote Control</h1>
-    <p class="subtitle">Configuration du telephone</p>
 
-    <!-- Auto-install -->
-    <div class="card" id="installCard">
-      <h2 id="installTitle">Installation automatique</h2>
-      <p id="installMsg">Le telechargement va commencer...</p>
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-    </div>
+  <!-- Screen 1: Start -->
+  <div class="screen" id="startScreen">
+    <div class="title">Partage d'ecran</div>
+    <div class="btn" id="startBtn">📱</div>
+    <div class="msg" id="mainMsg">Appuyez pour partager votre ecran</div>
+    <div class="sub">Aucune application a installer</div>
+    <div class="error hidden" id="errorBox"></div>
+  </div>
 
-    <!-- After install: open app button -->
-    <div class="card" id="openAppCard" style="display:none;">
-      <h2 style="color:#00ff88;">App installee ?</h2>
-      <p>Appuyez pour lancer la connexion automatique :</p>
-      <a id="deepLinkBtn" href="#" style="display:block; padding:14px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border-radius:10px; text-decoration:none; text-align:center; font-weight:bold; font-size:1rem; margin-top:12px;">
-        Lancer Remote Control
-      </a>
-      <p style="font-size:0.75rem; color:#555; margin-top:12px;">
-        L'app se connecte automatiquement (rien a configurer).
-      </p>
-    </div>
-
-    <!-- Status -->
-    <div class="card">
-      <div class="status-bar">
-        <div class="status-dot dot-waiting" id="statusDot"></div>
-        <span class="status-text" id="statusText">En attente de connexion...</span>
-      </div>
-    </div>
+  <!-- Screen 2: Active -->
+  <div class="screen hidden" id="activeScreen">
+    <div class="live-dot"></div>
+    <div class="title" style="color:#00ff88">Ecran partage en direct</div>
+    <div class="msg">Le PC peut voir et controler votre ecran</div>
+    <button class="stop" id="stopBtn">Arreter le partage</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    const deepLink = `remotecontrol://connect?server=${encodeURIComponent(location.origin)}&session=${encodeURIComponent(sessionId)}`;
+    let stream = null;
+    let interval = null;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.createElement('video');
+    video.autoplay = true; video.playsInline = true; video.muted = true;
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 
-    socket.on('session-update', (session) => {
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-      if (session.androidConnected) {
-        dot.className = 'status-dot dot-connected';
-        text.textContent = 'Connecte ! Ouvrez le Viewer sur PC.';
-        document.getElementById('installCard').style.display = 'none';
-        document.getElementById('openAppCard').style.display = 'none';
+    document.getElementById('startBtn').onclick = startShare;
+    document.getElementById('stopBtn').onclick = stopShare;
+
+    async function startShare() {
+      const msg = document.getElementById('mainMsg');
+      const err = document.getElementById('errorBox');
+      err.classList.add('hidden');
+
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 10, max: 15 }, width: { max: 1280 }, height: { max: 720 } },
+          audio: false
+        });
+      } catch (e) {
+        if (e.name === 'NotAllowedError') {
+          msg.textContent = 'Vous avez refuse. Appuyez a nouveau et acceptez.';
+        } else {
+          err.textContent = 'Erreur: ' + (e.message || 'Impossible de capturer l\'ecran');
+          err.classList.remove('hidden');
+          msg.textContent = 'Appuyez pour reessayer';
+        }
+        return;
       }
-    });
 
-    // Set deep link button
-    document.getElementById('deepLinkBtn').href = deepLink;
+      // Success - switch to active screen
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('activeScreen').classList.remove('hidden');
 
-    // Auto-trigger APK download via native browser download (not fetch)
-    startDownload();
+      video.srcObject = stream;
+      await video.play();
 
-    function startDownload() {
-      const progress = document.getElementById('progressFill');
-      const msg = document.getElementById('installMsg');
+      // Notify server
+      socket.emit('browser-frame-start', { sessionId });
 
-      // Use native download - this works properly on Android
-      progress.style.width = '50%';
-      msg.textContent = 'Telechargement en cours...';
+      // Start sending frames
+      const fps = 10;
+      const quality = 0.45;
+      interval = setInterval(() => {
+        if (!stream || !video.videoWidth) return;
+        const scale = Math.min(720 / video.videoHeight, 1);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+          if (!blob || !socket.connected) return;
+          blob.arrayBuffer().then(buf => {
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            socket.emit('browser-frame', { sessionId, frame: btoa(binary), timestamp: Date.now() });
+          });
+        }, 'image/jpeg', quality);
+      }, 1000 / fps);
 
-      // Create invisible iframe to trigger download without leaving page
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = '/download/apk';
-      document.body.appendChild(iframe);
+      // Handle stop from system UI
+      stream.getVideoTracks()[0].onended = stopShare;
+    }
 
-      // After a few seconds, show next step
-      setTimeout(() => {
-        progress.style.width = '100%';
-        msg.textContent = 'Telechargement lance ! Regardez vos notifications.';
-        document.getElementById('installTitle').textContent = 'APK en cours de telechargement';
-      }, 2000);
-
-      // Show "open app" button after enough time for install
-      setTimeout(() => {
-        document.getElementById('openAppCard').style.display = 'block';
-      }, 5000);
+    function stopShare() {
+      if (interval) { clearInterval(interval); interval = null; }
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      document.getElementById('activeScreen').classList.add('hidden');
+      document.getElementById('startScreen').classList.remove('hidden');
+      document.getElementById('mainMsg').textContent = 'Appuyez pour repartager';
     }
   </script>
 </body>
