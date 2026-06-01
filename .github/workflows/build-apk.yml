@@ -30,27 +30,44 @@ jobs:
         working-directory: android-app
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Build debug APK
+      - name: Generate signing key
+        working-directory: android-app/app
+        run: |
+          keytool -genkeypair -v \
+            -keystore release-key.jks \
+            -keyalg RSA -keysize 2048 \
+            -validity 10000 \
+            -alias remote-control \
+            -storepass remotecontrol2024 \
+            -keypass remotecontrol2024 \
+            -dname "CN=Remote Control, OU=App, O=RemoteControl, L=Paris, ST=IDF, C=FR"
+
+      - name: Build release APK
         working-directory: android-app
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
 
       - name: Rename APK
-        run: cp android-app/app/build/outputs/apk/debug/app-debug.apk android-app/app/build/outputs/apk/debug/remote-control.apk
+        run: cp android-app/app/build/outputs/apk/release/app-release.apk android-app/app/build/outputs/apk/release/remote-control.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: remote-control-apk
-          path: android-app/app/build/outputs/apk/debug/remote-control.apk
+          path: android-app/app/build/outputs/apk/release/remote-control.apk
 
-      - name: Create or update Release
+      - name: Delete old release
+        run: gh release delete latest --yes || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Remote Control APK
           body: |
-            Derniere version de l'app Android Remote Control.
-            Telechargez remote-control.apk et installez-le sur votre telephone.
-          files: android-app/app/build/outputs/apk/debug/remote-control.apk
+            App Android Remote Control (signee).
+            Telechargez et installez remote-control.apk.
+          files: android-app/app/build/outputs/apk/release/remote-control.apk
           make_latest: true
           prerelease: false
