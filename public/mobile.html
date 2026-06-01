@@ -90,9 +90,29 @@
       if (started) return;
       started = true;
 
+      // Check secure context
+      if (!window.isSecureContext) {
+        document.getElementById('trigger').querySelector('span').textContent = 
+          '⚠️ HTTPS requis. Utilisez le lien Render (https://)';
+        started = false;
+        return;
+      }
+
+      // Check API support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        document.getElementById('trigger').querySelector('span').textContent = 
+          '⚠️ Navigateur non supporté. Utilisez Chrome.';
+        started = false;
+        return;
+      }
+
       try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: { ideal: 30 } },
+          video: { 
+            frameRate: { ideal: 15, max: 30 },
+            width: { ideal: 720 },
+            height: { ideal: 1280 }
+          },
           audio: false
         });
         // Success - setup connection
@@ -100,9 +120,16 @@
         document.getElementById('status').classList.add('active');
         setupPeerConnection();
       } catch (err) {
-        // User denied or error - reset
         started = false;
-        document.getElementById('trigger').querySelector('span').textContent = 'Appuyez pour réessayer';
+        let msg = 'Appuyez pour réessayer';
+        if (err.name === 'NotAllowedError') {
+          msg = '❌ Permission refusée. Appuyez et acceptez le partage.';
+        } else if (err.name === 'NotSupportedError') {
+          msg = '⚠️ Non supporté sur ce navigateur. Essayez Chrome.';
+        } else {
+          msg = '❌ Erreur: ' + err.message;
+        }
+        document.getElementById('trigger').querySelector('span').textContent = msg;
       }
     }
 
