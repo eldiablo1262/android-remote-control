@@ -3,303 +3,236 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Android Remote - Partage d'écran</title>
+  <title>Remote Control - Configuration</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #000;
-      color: #fff;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      touch-action: manipulation;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 20px;
     }
-    #startScreen {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 30px;
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 {
       text-align: center;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
-    #startScreen h1 {
-      font-size: 1.3rem;
+      font-size: 1.4rem;
       color: #667eea;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 20px;
       margin-bottom: 16px;
     }
-    #startScreen .big-btn {
-      width: 120px; height: 120px;
+    .card h2 {
+      font-size: 1.1rem;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .card .num {
+      display: inline-flex;
+      width: 28px; height: 28px;
+      background: #667eea;
+      color: #fff;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 2.5rem;
-      margin-bottom: 20px;
-      box-shadow: 0 8px 30px rgba(102,126,234,0.4);
-      animation: pulse 2s infinite;
+      font-weight: bold;
+      font-size: 0.85rem;
+      margin-right: 10px;
     }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-    #startScreen .msg {
-      font-size: 1rem;
-      color: #ccc;
+    .card p {
+      font-size: 0.85rem;
+      color: #aaa;
       line-height: 1.6;
-      max-width: 320px;
+      margin-bottom: 10px;
     }
-    #startScreen .sub {
+    .ws-box {
+      background: #0a0a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: monospace;
       font-size: 0.8rem;
-      color: #666;
+      color: #00ff88;
+      word-break: break-all;
+      margin: 10px 0;
+      cursor: pointer;
+      text-align: center;
+    }
+    .ws-box:active { background: #001a00; }
+    .copy-msg {
+      text-align: center;
+      font-size: 0.7rem;
+      color: #555;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .badge-green { background: #002d00; color: #00ff88; }
+    .badge-blue { background: #001a3d; color: #5599ff; }
+    .steps-list {
+      list-style: none;
+      padding: 0;
+    }
+    .steps-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+      font-size: 0.85rem;
+      color: #ccc;
+      line-height: 1.5;
+    }
+    .download-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      margin: 12px 0;
+    }
+    .download-btn:active { opacity: 0.8; }
+    .status-bar {
+      background: #0a0a1a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       margin-top: 12px;
     }
-    #activeScreen {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #000;
-    }
-    #activeScreen.active { display: flex; }
-    .pulse-dot {
-      width: 16px; height: 16px;
-      background: #00ff00;
+    .status-dot {
+      width: 10px; height: 10px;
       border-radius: 50%;
-      margin-bottom: 16px;
-      animation: blink 1.5s infinite;
+      animation: blink 2s infinite;
     }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .active-text { font-size: 1rem; color: #aaa; margin-bottom: 8px; }
-    .active-sub { font-size: 0.8rem; color: #555; }
-    .stop-btn {
-      margin-top: 30px;
-      padding: 12px 30px;
-      border: 2px solid #ff4444;
-      background: transparent;
-      color: #ff4444;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-    .error-msg {
-      background: #1a0000;
-      border: 1px solid #440000;
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 20px;
-      max-width: 320px;
-      font-size: 0.8rem;
-      color: #ff8888;
-      line-height: 1.5;
-      display: none;
-    }
+    .dot-waiting { background: #ffd700; }
+    .dot-connected { background: #00ff00; animation: none; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .status-text { font-size: 0.85rem; color: #aaa; }
   </style>
 </head>
 <body>
-  <div id="startScreen">
-    <h1>Partage d'écran</h1>
-    <div class="big-btn">📱</div>
-    <div class="msg" id="mainMsg">Appuyez pour partager votre écran</div>
-    <div class="sub" id="subMsg">Fonctionne sur tous les navigateurs (Chrome, Firefox, Edge, Samsung Internet...)</div>
-    <div class="error-msg" id="errorMsg"></div>
-    <div class="sub" style="margin-top:20px; font-size:0.7rem; color:#444; max-width:300px;">
-      Si vous voyez un avertissement de sécurité, appuyez sur "Paramètres avancés" puis "Continuer". C'est normal (certificat auto-signé).
-    </div>
-  </div>
+  <div class="container">
+    <h1>Remote Control</h1>
+    <p class="subtitle">Configuration du telephone</p>
 
-  <div id="activeScreen">
-    <div class="pulse-dot"></div>
-    <div class="active-text">Écran partagé en direct</div>
-    <div class="active-sub">Le PC voit votre écran et peut le contrôler</div>
-    <button class="stop-btn" onclick="stopSharing()">Arrêter le partage</button>
+    <!-- Step 1: Download APK -->
+    <div class="card">
+      <h2><span class="num">1</span> Installer l'app</h2>
+      <p>Telechargez et installez l'app sur ce telephone :</p>
+      <a class="download-btn" id="apkLink" href="#" target="_blank">
+        Telecharger l'APK
+      </a>
+      <p style="font-size:0.75rem; color:#666;">
+        Si Android bloque l'installation : Parametres > Securite > Autoriser les sources inconnues
+      </p>
+    </div>
+
+    <!-- Step 2: Configure -->
+    <div class="card">
+      <h2><span class="num">2</span> Configurer l'app</h2>
+      <p>Ouvrez l'app et entrez ces informations :</p>
+      
+      <p style="font-size:0.8rem; color:#888; margin-bottom:4px;">URL du serveur :</p>
+      <div class="ws-box" id="serverUrl" onclick="copyText('serverUrl')">...</div>
+      
+      <p style="font-size:0.8rem; color:#888; margin-bottom:4px;">Session ID :</p>
+      <div class="ws-box" id="sessionIdBox" onclick="copyText('sessionIdBox')">...</div>
+      <div class="copy-msg" id="copyMsg">Appuyez pour copier</div>
+    </div>
+
+    <!-- Step 3: Permissions -->
+    <div class="card">
+      <h2><span class="num">3</span> Permissions</h2>
+      <ol class="steps-list">
+        <li><span class="badge badge-green">Capture</span> Acceptez "Partage d'ecran" quand demande</li>
+        <li><span class="badge badge-blue">Controle</span> Activez le service d'Accessibilite "Remote Control"</li>
+      </ol>
+      <p style="font-size:0.75rem; color:#666;">
+        L'accessibilite permet de simuler les touches et gestes a distance. Sans ca, seul l'ecran sera visible (pas de controle).
+      </p>
+    </div>
+
+    <!-- Status -->
+    <div class="card">
+      <h2>Statut</h2>
+      <div class="status-bar">
+        <div class="status-dot dot-waiting" id="statusDot"></div>
+        <span class="status-text" id="statusText">En attente de connexion...</span>
+      </div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    let capturing = false;
-    let captureStream = null;
-    let captureInterval = null;
-    let canvas = document.createElement('canvas');
-    let ctx = canvas.getContext('2d');
-    let video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
+
+    // Fill in server URL and session ID
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const serverWs = `${proto}//${location.host}`;
+    document.getElementById('serverUrl').textContent = location.origin;
+    document.getElementById('sessionIdBox').textContent = sessionId;
+
+    // APK download link (GitHub releases)
+    const repoUrl = 'https://github.com/eldiablo1262/android-remote-control';
+    document.getElementById('apkLink').href = repoUrl + '/releases/latest';
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 
-    // Click anywhere to start
-    document.getElementById('startScreen').addEventListener('click', startCapture);
-    document.getElementById('startScreen').addEventListener('touchend', (e) => {
-      e.preventDefault();
-      startCapture();
-    });
-
-    async function startCapture() {
-      if (capturing) return;
-
-      const errorEl = document.getElementById('errorMsg');
-      errorEl.style.display = 'none';
-
-      try {
-        let stream = null;
-
-        // Method 1: getDisplayMedia (screen capture)
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-          try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: {
-                frameRate: { ideal: 15, max: 30 },
-                width: { max: 1280 },
-                height: { max: 720 }
-              },
-              audio: false
-            });
-          } catch (displayErr) {
-            // User denied or API failed - try fallback
-            if (displayErr.name === 'NotAllowedError') {
-              document.getElementById('mainMsg').textContent = 'Permission refusée — Appuyez et acceptez le partage';
-              return;
-            }
-            // API exists but failed (some Android versions) - try camera fallback
-            stream = null;
-          }
-        }
-
-        // Method 2: Older getDisplayMedia API
-        if (!stream && navigator.getDisplayMedia) {
-          try {
-            stream = await navigator.getDisplayMedia({ video: true });
-          } catch (e) { stream = null; }
-        }
-
-        // Method 3: If screen capture not available, use front camera as fallback
-        if (!stream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: 'environment', width: { max: 1280 }, height: { max: 720 } }
-            });
-            document.getElementById('mainMsg').textContent = 'Mode caméra (capture écran non disponible sur cet appareil)';
-          } catch (camErr) {
-            stream = null;
-          }
-        }
-
-        if (!stream) {
-          throw new Error('NO_CAPTURE');
-        }
-
-        // Success!
-        capturing = true;
-        captureStream = stream;
-        document.getElementById('startScreen').style.display = 'none';
-        document.getElementById('activeScreen').classList.add('active');
-
-        video.srcObject = stream;
-        await video.play();
-
-        // Start sending frames
-        startFrameCapture();
-
-        // Handle stream end
-        stream.getVideoTracks()[0].onended = () => {
-          stopSharing();
-        };
-
-      } catch (err) {
-        handleError(err);
-      }
-    }
-
-    function startFrameCapture() {
-      const fps = 12;
-      const quality = 0.5; // JPEG quality
-
-      captureInterval = setInterval(() => {
-        if (!capturing || !video.videoWidth) return;
-
-        // Scale down for bandwidth
-        const scale = Math.min(720 / video.videoHeight, 1);
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob((blob) => {
-          if (blob && socket.connected) {
-            blob.arrayBuffer().then(buffer => {
-              // Send as base64 via socket (binary not supported in all socket.io transports)
-              const base64 = arrayBufferToBase64(buffer);
-              socket.emit('browser-frame', { sessionId, frame: base64, timestamp: Date.now() });
-            });
-          }
-        }, 'image/jpeg', quality);
-      }, 1000 / fps);
-    }
-
-    function stopSharing() {
-      capturing = false;
-      if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
-      if (captureStream) {
-        captureStream.getTracks().forEach(t => t.stop());
-        captureStream = null;
-      }
-      document.getElementById('activeScreen').classList.remove('active');
-      document.getElementById('startScreen').style.display = 'flex';
-      document.getElementById('mainMsg').textContent = 'Appuyez pour repartager';
-    }
-
-    function handleError(err) {
-      const errorEl = document.getElementById('errorMsg');
-      const mainMsg = document.getElementById('mainMsg');
-
-      if (err.message === 'NO_CAPTURE') {
-        errorEl.innerHTML = `
-          Impossible d'accéder à la capture sur cet appareil.<br><br>
-          <strong>Solutions :</strong><br>
-          - Vérifiez que votre navigateur est à jour<br>
-          - Autorisez les permissions quand demandé<br>
-          - Alternative : installez Termux et lancez le script capture.js
-        `;
-        errorEl.style.display = 'block';
-        mainMsg.textContent = 'Appuyez pour réessayer';
-      } else if (err.name === 'NotAllowedError') {
-        mainMsg.textContent = 'Permission refusée — Appuyez et acceptez le partage';
-      } else if (err.name === 'AbortError') {
-        mainMsg.textContent = 'Annulé — Appuyez pour réessayer';
+    socket.on('session-update', (session) => {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (session.androidConnected) {
+        dot.className = 'status-dot dot-connected';
+        text.textContent = 'Telephone connecte ! Ouvrez le Viewer sur PC.';
       } else {
-        mainMsg.textContent = 'Appuyez pour réessayer';
+        dot.className = 'status-dot dot-waiting';
+        text.textContent = 'En attente de connexion...';
       }
-    }
-
-    function arrayBufferToBase64(buffer) {
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binary);
-    }
-
-    // Handle touch events from viewer (relay to display)
-    socket.on('touch-event', ({ event }) => {
-      // In browser mode, we can't simulate touches on the device
-      // This only works with native app or Termux
-      console.log('Touch event received (browser mode - limited control)', event);
     });
+
+    function copyText(elId) {
+      const text = document.getElementById(elId).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('copyMsg').textContent = 'Copie !';
+        setTimeout(() => { document.getElementById('copyMsg').textContent = 'Appuyez pour copier'; }, 2000);
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        document.getElementById('copyMsg').textContent = 'Copie !';
+        setTimeout(() => { document.getElementById('copyMsg').textContent = 'Appuyez pour copier'; }, 2000);
+      });
+    }
   </script>
 </body>
 </html>
