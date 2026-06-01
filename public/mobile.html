@@ -199,9 +199,9 @@
     document.getElementById('serverUrl').textContent = location.origin;
     document.getElementById('sessionIdBox').textContent = sessionId;
 
-    // APK download link (GitHub releases)
-    const repoUrl = 'https://github.com/eldiablo1262/android-remote-control';
-    document.getElementById('apkLink').href = repoUrl + '/releases/latest';
+    // Direct APK download link (GitHub release asset)
+    const apkUrl = 'https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk';
+    document.getElementById('apkLink').href = apkUrl;
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 

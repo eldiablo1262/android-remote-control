@@ -4,11 +4,14 @@ on:
   push:
     paths:
       - 'android-app/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -23,17 +26,31 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Make gradlew executable
-        run: chmod +x android-app/gradlew || true
+      - name: Generate Gradle wrapper
+        working-directory: android-app
+        run: gradle wrapper --gradle-version 8.5
 
       - name: Build debug APK
         working-directory: android-app
-        run: |
-          gradle wrapper
-          ./gradlew assembleDebug
+        run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Rename APK
+        run: cp android-app/app/build/outputs/apk/debug/app-debug.apk android-app/app/build/outputs/apk/debug/remote-control.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: remote-control-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          path: android-app/app/build/outputs/apk/debug/remote-control.apk
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Remote Control APK
+          body: |
+            Derniere version de l'app Android Remote Control.
+            Telechargez remote-control.apk et installez-le sur votre telephone.
+          files: android-app/app/build/outputs/apk/debug/remote-control.apk
+          make_latest: true
+          prerelease: false
