@@ -87,6 +87,23 @@
     document.getElementById('startBtn').onclick = startShare;
     document.getElementById('stopBtn').onclick = stopShare;
 
+    // If browser doesn't support screen capture, auto-open in Chrome (always installed on Android)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      // Redirect to Chrome via Android Intent
+      const currentUrl = window.location.href;
+      window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+      // Fallback if intent doesn't work after 2s
+      setTimeout(() => {
+        document.getElementById('mainMsg').textContent = 'Ouvrez ce lien dans votre navigateur principal';
+        document.getElementById('errorBox').textContent = currentUrl;
+        document.getElementById('errorBox').classList.remove('hidden');
+        document.getElementById('errorBox').style.color = '#00ff88';
+        document.getElementById('errorBox').style.background = '#001a00';
+        document.getElementById('errorBox').style.border = '1px solid #004400';
+        document.getElementById('errorBox').style.userSelect = 'all';
+      }, 2000);
+    }
+
     async function startShare() {
       const msg = document.getElementById('mainMsg');
       const err = document.getElementById('errorBox');
@@ -101,9 +118,12 @@
         if (e.name === 'NotAllowedError') {
           msg.textContent = 'Vous avez refuse. Appuyez a nouveau et acceptez.';
         } else {
-          err.textContent = 'Erreur: ' + (e.message || 'Impossible de capturer l\'ecran');
-          err.classList.remove('hidden');
-          msg.textContent = 'Appuyez pour reessayer';
+          // Try opening in Chrome
+          const currentUrl = window.location.href;
+          window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+          setTimeout(() => {
+            msg.textContent = 'Ouvrez ce lien dans votre navigateur principal';
+          }, 2000);
         }
         return;
       }
