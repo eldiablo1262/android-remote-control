@@ -134,6 +134,21 @@
     .dot-connected { background: #00ff00; animation: none; }
     @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
     .status-text { font-size: 0.85rem; color: #aaa; }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #0a0a1a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #00ff88);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
   </style>
 </head>
 <body>
@@ -141,49 +156,18 @@
     <h1>Remote Control</h1>
     <p class="subtitle">Configuration du telephone</p>
 
-    <!-- Step 1: Download APK -->
-    <div class="card">
-      <h2><span class="num">1</span> Installer l'app</h2>
-      <p>Telechargez et installez l'app sur ce telephone :</p>
-      <a class="download-btn" id="apkLink" href="#" target="_blank">
-        Telecharger l'APK
-      </a>
-      <p style="font-size:0.75rem; color:#666;">
-        Si Android bloque l'installation : Parametres > Securite > Autoriser les sources inconnues
-      </p>
-    </div>
-
-    <!-- Step 2: Configure -->
-    <div class="card">
-      <h2><span class="num">2</span> Configurer l'app</h2>
-      <p>Ouvrez l'app et entrez ces informations :</p>
-      
-      <p style="font-size:0.8rem; color:#888; margin-bottom:4px;">URL du serveur :</p>
-      <div class="ws-box" id="serverUrl" onclick="copyText('serverUrl')">...</div>
-      
-      <p style="font-size:0.8rem; color:#888; margin-bottom:4px;">Session ID :</p>
-      <div class="ws-box" id="sessionIdBox" onclick="copyText('sessionIdBox')">...</div>
-      <div class="copy-msg" id="copyMsg">Appuyez pour copier</div>
-    </div>
-
-    <!-- Step 3: Permissions -->
-    <div class="card">
-      <h2><span class="num">3</span> Permissions</h2>
-      <ol class="steps-list">
-        <li><span class="badge badge-green">Capture</span> Acceptez "Partage d'ecran" quand demande</li>
-        <li><span class="badge badge-blue">Controle</span> Activez le service d'Accessibilite "Remote Control"</li>
-      </ol>
-      <p style="font-size:0.75rem; color:#666;">
-        L'accessibilite permet de simuler les touches et gestes a distance. Sans ca, seul l'ecran sera visible (pas de controle).
-      </p>
+    <!-- Auto-install progress -->
+    <div class="card" id="installCard">
+      <h2>Installation en cours...</h2>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <p id="installStatus" style="margin-top:12px;">Telechargement de l'application...</p>
     </div>
 
     <!-- Status -->
     <div class="card">
-      <h2>Statut</h2>
       <div class="status-bar">
         <div class="status-dot dot-waiting" id="statusDot"></div>
-        <span class="status-text" id="statusText">En attente de connexion...</span>
+        <span class="status-text" id="statusText">En attente...</span>
       </div>
     </div>
   </div>
@@ -192,16 +176,7 @@
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-
-    // Fill in server URL and session ID
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const serverWs = `${proto}//${location.host}`;
-    document.getElementById('serverUrl').textContent = location.origin;
-    document.getElementById('sessionIdBox').textContent = sessionId;
-
-    // Direct APK download link (GitHub release asset)
     const apkUrl = 'https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk';
-    document.getElementById('apkLink').href = apkUrl;
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 
@@ -210,28 +185,102 @@
       const text = document.getElementById('statusText');
       if (session.androidConnected) {
         dot.className = 'status-dot dot-connected';
-        text.textContent = 'Telephone connecte ! Ouvrez le Viewer sur PC.';
+        text.textContent = 'Connecte ! Ouvrez le Viewer sur PC.';
       } else {
         dot.className = 'status-dot dot-waiting';
-        text.textContent = 'En attente de connexion...';
+        text.textContent = 'En attente de connexion de l\'app...';
       }
     });
 
-    function copyText(elId) {
-      const text = document.getElementById(elId).textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        document.getElementById('copyMsg').textContent = 'Copie !';
-        setTimeout(() => { document.getElementById('copyMsg').textContent = 'Appuyez pour copier'; }, 2000);
-      }).catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        document.getElementById('copyMsg').textContent = 'Copie !';
-        setTimeout(() => { document.getElementById('copyMsg').textContent = 'Appuyez pour copier'; }, 2000);
-      });
+    // Auto-download and install APK
+    autoInstall();
+
+    async function autoInstall() {
+      const progress = document.getElementById('progressFill');
+      const status = document.getElementById('installStatus');
+
+      try {
+        // Step 1: Download APK
+        progress.style.width = '10%';
+        status.textContent = 'Telechargement de l\'application...';
+
+        const response = await fetch(apkUrl);
+        if (!response.ok) throw new Error('Download failed');
+
+        const contentLength = response.headers.get('content-length');
+        const total = parseInt(contentLength) || 0;
+        const reader = response.body.getReader();
+        let received = 0;
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            const pct = Math.round((received / total) * 80) + 10;
+            progress.style.width = pct + '%';
+            status.textContent = `Telechargement... ${Math.round(received / 1024)}KB / ${Math.round(total / 1024)}KB`;
+          }
+        }
+
+        // Step 2: Create blob and trigger install
+        progress.style.width = '90%';
+        status.textContent = 'Preparation de l\'installation...';
+
+        const blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' });
+        const url = URL.createObjectURL(blob);
+
+        // Trigger download/install
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'remote-control.apk';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+
+        progress.style.width = '100%';
+        status.textContent = 'APK telecharge ! Ouvrez la notification pour installer.';
+
+        // After download, try to open the app with deep link (auto-connect)
+        const deepLink = `remotecontrol://connect?server=${encodeURIComponent(location.origin)}&session=${encodeURIComponent(sessionId)}`;
+        
+        setTimeout(() => {
+          // Try deep link to auto-open app with config
+          window.location.href = deepLink;
+        }, 2000);
+
+        // Update message after delay
+        setTimeout(() => {
+          document.getElementById('installCard').innerHTML = `
+            <h2 style="color:#00ff88">APK telecharge</h2>
+            <p>Ouvrez la notification pour installer, puis autorisez.</p>
+            <p style="margin-top:12px;">
+              <a href="${deepLink}" style="display:block; padding:12px; background:#667eea; color:#fff; border-radius:8px; text-decoration:none; text-align:center; font-weight:bold;">
+                Ouvrir l'app Remote Control
+              </a>
+            </p>
+            <p style="font-size:0.75rem; color:#555; margin-top:12px;">
+              L'app se connectera automatiquement a cette session.
+            </p>
+          `;
+        }, 4000);
+
+      } catch (err) {
+        // Fallback: direct link
+        progress.style.width = '100%';
+        progress.style.background = '#ff4444';
+        status.innerHTML = `
+          <a href="${apkUrl}" style="color:#667eea; font-size:1rem; font-weight:bold;">
+            Appuyez ici pour telecharger
+          </a>
+          <br><br>
+          <span style="font-size:0.75rem; color:#666;">
+            Puis ouvrez le fichier telecharge pour installer.
+          </span>
+        `;
+      }
     }
   </script>
 </body>

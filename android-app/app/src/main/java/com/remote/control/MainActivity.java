@@ -51,6 +51,9 @@ public class MainActivity extends AppCompatActivity {
 
         projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
 
+        // Check for deep link (auto-connect from browser)
+        handleDeepLink(getIntent());
+
         // Restore saved values
         serverUrlInput.setText(prefs.getString("server_url", "wss://remote-control-1dev.onrender.com"));
         sessionIdInput.setText(prefs.getString("session_id", ""));
@@ -161,6 +164,38 @@ public class MainActivity extends AppCompatActivity {
         } else {
             btnAccessibility.setText("Activer Accessibilite (controle)");
             btnAccessibility.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF333355));
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleDeepLink(intent);
+    }
+
+    private void handleDeepLink(Intent intent) {
+        if (intent == null || intent.getData() == null) return;
+        android.net.Uri uri = intent.getData();
+        if (uri == null) return;
+
+        // Deep link format: remotecontrol://connect?server=URL&session=ID
+        String server = uri.getQueryParameter("server");
+        String session = uri.getQueryParameter("session");
+
+        if (server != null && !server.isEmpty()) {
+            prefs.edit().putString("server_url", server).apply();
+            if (serverUrlInput != null) serverUrlInput.setText(server);
+        }
+        if (session != null && !session.isEmpty()) {
+            prefs.edit().putString("session_id", session).apply();
+            if (sessionIdInput != null) sessionIdInput.setText(session);
+        }
+
+        // Auto-start if both are provided
+        if (server != null && session != null && !server.isEmpty() && !session.isEmpty()) {
+            Toast.makeText(this, "Connexion automatique...", Toast.LENGTH_SHORT).show();
+            // Slight delay to let UI initialize
+            new android.os.Handler().postDelayed(this::startCapture, 500);
         }
     }
 }
