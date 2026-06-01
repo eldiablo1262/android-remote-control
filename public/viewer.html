@@ -214,7 +214,8 @@
   <div class="phone-container">
     <div class="phone-frame">
       <div class="phone-screen" id="phoneScreen">
-        <video id="remoteVideo" autoplay playsinline></video>
+        <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
+        <img id="remoteImage" style="width:100%;height:100%;object-fit:contain;border-radius:28px;display:none;" />
         <div class="touch-cursor" id="touchCursor"></div>
         <div class="waiting-overlay" id="waitingOverlay">
           <div class="spinner"></div>
@@ -243,6 +244,7 @@
 
     const phoneScreen = document.getElementById('phoneScreen');
     const remoteVideo = document.getElementById('remoteVideo');
+    const remoteImage = document.getElementById('remoteImage');
     const waitingOverlay = document.getElementById('waitingOverlay');
     const touchCursor = document.getElementById('touchCursor');
     const mobileStatus = document.getElementById('mobileStatus');
@@ -262,7 +264,24 @@
       }
     });
 
-    // Handle offer from mobile
+    // Handle JPEG frames from native Android app (via MediaProjection)
+    socket.on('screen-frame', ({ frame, timestamp }) => {
+      remoteImage.src = 'data:image/jpeg;base64,' + frame;
+      remoteImage.style.display = 'block';
+      remoteVideo.style.display = 'none';
+      waitingOverlay.style.display = 'none';
+      if (!isStreaming) {
+        isStreaming = true;
+        streamStatus.textContent = 'Actif';
+        streamStatus.className = 'status-badge badge-ok';
+        controlStatus.textContent = 'Actif';
+        controlStatus.className = 'status-badge badge-ok';
+      }
+      // FPS tracking
+      frameCount++;
+    });
+
+    // Handle offer from mobile (WebRTC browser fallback)
     socket.on('offer', async ({ offer }) => {
       const config = {
         iceServers: [
@@ -273,9 +292,11 @@
 
       peerConnection = new RTCPeerConnection(config);
 
-      // Handle incoming stream
+      // Handle incoming stream (WebRTC)
       peerConnection.ontrack = (event) => {
         remoteVideo.srcObject = event.streams[0];
+        remoteVideo.style.display = 'block';
+        remoteImage.style.display = 'none';
         waitingOverlay.style.display = 'none';
         isStreaming = true;
         streamStatus.textContent = 'Actif';

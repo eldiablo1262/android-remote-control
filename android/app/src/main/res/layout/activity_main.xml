@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="#121212">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Remote Control"
+        android:textSize="28sp"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Capture d'écran + Contrôle à distance"
+        android:textSize="14sp"
+        android:textColor="#888888"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Server IP -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Adresse IP du serveur"
+        android:textColor="#BBBBBB"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/et_server_ip"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="192.168.1.100"
+        android:inputType="text"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:background="@android:color/transparent"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Server Port -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Port"
+        android:textColor="#BBBBBB"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/et_server_port"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="3000"
+        android:inputType="number"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:background="@android:color/transparent"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Session ID -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Session ID"
+        android:textColor="#BBBBBB"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/et_session_id"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="Coller l'ID de session du dashboard"
+        android:inputType="text"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:background="@android:color/transparent"
+        android:padding="12dp"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Start Button -->
+    <Button
+        android:id="@+id/btn_start"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="▶ Démarrer la capture"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:backgroundTint="#667eea"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Stop Button -->
+    <Button
+        android:id="@+id/btn_stop"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="⏹ Arrêter"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:backgroundTint="#d32f2f"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Accessibility Settings -->
+    <Button
+        android:id="@+id/btn_accessibility"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="⚙ Activer le service d'accessibilité"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:backgroundTint="#333333"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Status -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: Arrêté"
+        android:textColor="#888888"
+        android:textSize="14sp"
+        android:layout_gravity="center_horizontal" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Instructions:\n1. Créez une session sur le dashboard PC\n2. Collez le Session ID ci-dessus\n3. Activez le service d'accessibilité\n4. Appuyez sur Démarrer"
+        android:textColor="#666666"
+        android:textSize="12sp"
+        android:lineSpacingMultiplier="1.4"
+        android:layout_gravity="center_horizontal" />
+
+</LinearLayout>
