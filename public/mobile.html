@@ -116,12 +116,22 @@
       <span class="status-dot waiting" id="statusDot"></span>
       <span id="statusText">En attente de connexion...</span>
     </p>
+    <div id="compatWarning" style="display:none; background:#2d2d00; border:1px solid #665500; border-radius:8px; padding:12px; margin:12px 0; font-size:0.85rem; color:#ffd700;">
+      ⚠️ Partage d'écran non supporté sur ce navigateur.<br>
+      <strong>Solutions :</strong><br>
+      • Utilise <strong>Chrome 94+</strong> ou <strong>Edge</strong> sur Android<br>
+      • Ou utilise le mode caméra ci-dessous
+    </div>
     <button class="btn-share" id="btnShare" onclick="startScreenShare()">
       Partager mon écran
     </button>
+    <button class="btn-share" id="btnCamera" onclick="startCameraShare()" style="background: linear-gradient(135deg, #e67e22, #e74c3c); margin-top: 10px;">
+      📷 Partager la caméra (alternative)
+    </button>
     <p class="info">
       Appuyez sur le bouton pour partager votre écran avec le PC.<br>
-      Vous devrez autoriser la capture d'écran.
+      Vous devrez autoriser la capture d'écran.<br><br>
+      <strong>Navigateurs compatibles :</strong> Chrome 94+, Edge, Opera
     </p>
   </div>
 
@@ -145,19 +155,49 @@
       statusText.textContent = text;
     }
 
+    // Check compatibility
+    const hasDisplayMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+    if (!hasDisplayMedia) {
+      document.getElementById('compatWarning').style.display = 'block';
+      btnShare.style.opacity = '0.4';
+      btnShare.textContent = '⚠️ Non supporté sur ce navigateur';
+    }
+
     socket.on('session-update', (session) => {
       if (session.viewerConnected) {
         updateStatus('connected', 'Viewer connecté - Prêt à partager');
-        btnShare.disabled = false;
       }
     });
 
     socket.on('viewer-ready', () => {
       updateStatus('connected', 'Viewer prêt - Cliquez pour partager');
-      btnShare.disabled = false;
     });
 
+    // Camera fallback for incompatible browsers
+    async function startCameraShare() {
+      try {
+        updateStatus('streaming', 'Demande accès caméra...');
+        screenStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+        setupPeerConnection();
+      } catch (err) {
+        console.error('Camera error:', err);
+        updateStatus('error', `Erreur: ${err.message}`);
+      }
+    }
+
     async function startScreenShare() {
+      if (!hasDisplayMedia) {
+        alert('Partage d\'écran non supporté. Utilise Chrome 94+ ou le bouton "Partager la caméra".');
+        return;
+      }
       try {
         updateStatus('streaming', 'Demande de permission...');
         
@@ -171,63 +211,69 @@
           audio: false
         });
 
-        updateStatus('streaming', 'Écran partagé - Connexion...');
-        btnShare.disabled = true;
-        btnShare.textContent = '📡 Partage en cours...';
-
-        // Create WebRTC peer connection
-        const config = {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        };
-
-        peerConnection = new RTCPeerConnection(config);
-
-        // Add screen stream tracks
-        screenStream.getTracks().forEach(track => {
-          peerConnection.addTrack(track, screenStream);
-        });
-
-        // Create data channel for receiving touch events
-        dataChannel = peerConnection.createDataChannel('control', { ordered: true });
-        dataChannel.onopen = () => {
-          console.log('Data channel open - ready for control');
-          updateStatus('streaming', '✅ Connecté - Contrôle actif');
-        };
-        dataChannel.onmessage = (event) => {
-          handleRemoteEvent(JSON.parse(event.data));
-        };
-
-        // ICE candidates
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
-          }
-        };
-
-        // Create and send offer
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit('offer', { sessionId, offer });
-
-        // Handle stream end
-        screenStream.getVideoTracks()[0].onended = () => {
-          updateStatus('waiting', 'Partage arrêté');
-          btnShare.disabled = false;
-          btnShare.textContent = 'Partager mon écran';
-          if (peerConnection) {
-            peerConnection.close();
-            peerConnection = null;
-          }
-        };
-
+        setupPeerConnection();
       } catch (err) {
         console.error('Screen share error:', err);
         updateStatus('error', `Erreur: ${err.message}`);
         btnShare.disabled = false;
       }
+    }
+
+    async function setupPeerConnection() {
+      updateStatus('streaming', 'Connexion en cours...');
+      btnShare.disabled = true;
+      document.getElementById('btnCamera').disabled = true;
+      btnShare.textContent = '📡 Partage en cours...';
+
+      // Create WebRTC peer connection
+      const config = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      };
+
+      peerConnection = new RTCPeerConnection(config);
+
+      // Add stream tracks
+      screenStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, screenStream);
+      });
+
+      // Create data channel for receiving touch events
+      dataChannel = peerConnection.createDataChannel('control', { ordered: true });
+      dataChannel.onopen = () => {
+        console.log('Data channel open - ready for control');
+        updateStatus('streaming', '✅ Connecté - Contrôle actif');
+      };
+      dataChannel.onmessage = (event) => {
+        handleRemoteEvent(JSON.parse(event.data));
+      };
+
+      // ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
+        }
+      };
+
+      // Create and send offer
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('offer', { sessionId, offer });
+
+      // Handle stream end
+      screenStream.getVideoTracks()[0].onended = () => {
+        updateStatus('waiting', 'Partage arrêté');
+        btnShare.disabled = false;
+        document.getElementById('btnCamera').disabled = false;
+        btnShare.textContent = 'Partager mon écran';
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+        }
+      };
     }
 
     // Handle answer from viewer
