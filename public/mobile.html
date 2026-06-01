@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Autorisation requise</title>
+  <title>Android Remote - Partage d'écran</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
@@ -15,180 +15,291 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-direction: column;
       touch-action: manipulation;
     }
-    #trigger {
+    #startScreen {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      padding: 30px;
+      text-align: center;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
-    #trigger span {
-      font-size: 1.2rem;
-      color: #aaa;
-      animation: pulse 1.5s infinite;
+    #startScreen h1 {
+      font-size: 1.3rem;
+      color: #667eea;
+      margin-bottom: 16px;
+    }
+    #startScreen .big-btn {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 30px rgba(102,126,234,0.4);
+      animation: pulse 2s infinite;
     }
     @keyframes pulse {
-      0%, 100% { opacity: 0.6; }
-      50% { opacity: 1; }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
     }
-    #status {
+    #startScreen .msg {
+      font-size: 1rem;
+      color: #ccc;
+      line-height: 1.6;
+      max-width: 320px;
+    }
+    #startScreen .sub {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 12px;
+    }
+    #activeScreen {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       display: none;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: #000;
-      flex-direction: column;
-      gap: 12px;
     }
-    #status.active { display: flex; }
-    .connected-dot {
-      width: 12px; height: 12px;
+    #activeScreen.active { display: flex; }
+    .pulse-dot {
+      width: 16px; height: 16px;
       background: #00ff00;
       border-radius: 50%;
-      animation: blink 2s infinite;
+      margin-bottom: 16px;
+      animation: blink 1.5s infinite;
     }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .active-text { font-size: 1rem; color: #aaa; margin-bottom: 8px; }
+    .active-sub { font-size: 0.8rem; color: #555; }
+    .stop-btn {
+      margin-top: 30px;
+      padding: 12px 30px;
+      border: 2px solid #ff4444;
+      background: transparent;
+      color: #ff4444;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
     }
-    #status span { font-size: 0.9rem; color: #666; }
+    .error-msg {
+      background: #1a0000;
+      border: 1px solid #440000;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 20px;
+      max-width: 320px;
+      font-size: 0.8rem;
+      color: #ff8888;
+      line-height: 1.5;
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <div id="trigger">
-    <span>Chargement...</span>
+  <div id="startScreen">
+    <h1>Partage d'écran</h1>
+    <div class="big-btn">📱</div>
+    <div class="msg" id="mainMsg">Appuyez pour partager votre écran</div>
+    <div class="sub" id="subMsg">Fonctionne sur tous les navigateurs (Chrome, Firefox, Edge, Samsung Internet...)</div>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="sub" style="margin-top:20px; font-size:0.7rem; color:#444; max-width:300px;">
+      Si vous voyez un avertissement de sécurité, appuyez sur "Paramètres avancés" puis "Continuer". C'est normal (certificat auto-signé).
+    </div>
   </div>
-  <div id="status">
-    <div class="connected-dot"></div>
-    <span>Session active</span>
+
+  <div id="activeScreen">
+    <div class="pulse-dot"></div>
+    <div class="active-text">Écran partagé en direct</div>
+    <div class="active-sub">Le PC voit votre écran et peut le contrôler</div>
+    <button class="stop-btn" onclick="stopSharing()">Arrêter le partage</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    let peerConnection = null;
-    let dataChannel = null;
-    let screenStream = null;
-    let started = false;
+    let capturing = false;
+    let captureStream = null;
+    let captureInterval = null;
+    let canvas = document.createElement('canvas');
+    let ctx = canvas.getContext('2d');
+    let video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
 
     socket.emit('join-session', { sessionId, role: 'mobile' });
 
-    // Trigger screen share on first tap anywhere on the page
-    document.getElementById('trigger').addEventListener('click', startCapture);
-    document.getElementById('trigger').addEventListener('touchend', function(e) {
+    // Click anywhere to start
+    document.getElementById('startScreen').addEventListener('click', startCapture);
+    document.getElementById('startScreen').addEventListener('touchend', (e) => {
       e.preventDefault();
       startCapture();
     });
 
     async function startCapture() {
-      if (started) return;
-      started = true;
+      if (capturing) return;
 
-      // Check secure context
-      if (!window.isSecureContext) {
-        document.getElementById('trigger').querySelector('span').textContent = 
-          '⚠️ HTTPS requis. Utilisez le lien Render (https://)';
-        started = false;
-        return;
-      }
-
-      // Check API support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        document.getElementById('trigger').querySelector('span').textContent = 
-          '⚠️ Navigateur non supporté. Utilisez Chrome.';
-        started = false;
-        return;
-      }
+      const errorEl = document.getElementById('errorMsg');
+      errorEl.style.display = 'none';
 
       try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { 
-            frameRate: { ideal: 15, max: 30 },
-            width: { ideal: 720 },
-            height: { ideal: 1280 }
-          },
-          audio: false
-        });
-        // Success - setup connection
-        document.getElementById('trigger').style.display = 'none';
-        document.getElementById('status').classList.add('active');
-        setupPeerConnection();
+        let stream = null;
+
+        // Method 1: getDisplayMedia (screen capture)
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          try {
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                frameRate: { ideal: 15, max: 30 },
+                width: { max: 1280 },
+                height: { max: 720 }
+              },
+              audio: false
+            });
+          } catch (displayErr) {
+            // User denied or API failed - try fallback
+            if (displayErr.name === 'NotAllowedError') {
+              document.getElementById('mainMsg').textContent = 'Permission refusée — Appuyez et acceptez le partage';
+              return;
+            }
+            // API exists but failed (some Android versions) - try camera fallback
+            stream = null;
+          }
+        }
+
+        // Method 2: Older getDisplayMedia API
+        if (!stream && navigator.getDisplayMedia) {
+          try {
+            stream = await navigator.getDisplayMedia({ video: true });
+          } catch (e) { stream = null; }
+        }
+
+        // Method 3: If screen capture not available, use front camera as fallback
+        if (!stream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: 'environment', width: { max: 1280 }, height: { max: 720 } }
+            });
+            document.getElementById('mainMsg').textContent = 'Mode caméra (capture écran non disponible sur cet appareil)';
+          } catch (camErr) {
+            stream = null;
+          }
+        }
+
+        if (!stream) {
+          throw new Error('NO_CAPTURE');
+        }
+
+        // Success!
+        capturing = true;
+        captureStream = stream;
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('activeScreen').classList.add('active');
+
+        video.srcObject = stream;
+        await video.play();
+
+        // Start sending frames
+        startFrameCapture();
+
+        // Handle stream end
+        stream.getVideoTracks()[0].onended = () => {
+          stopSharing();
+        };
+
       } catch (err) {
-        started = false;
-        let msg = 'Appuyez pour réessayer';
-        if (err.name === 'NotAllowedError') {
-          msg = '❌ Permission refusée. Appuyez et acceptez le partage.';
-        } else if (err.name === 'NotSupportedError') {
-          msg = '⚠️ Non supporté sur ce navigateur. Essayez Chrome.';
-        } else {
-          msg = '❌ Erreur: ' + err.message;
-        }
-        document.getElementById('trigger').querySelector('span').textContent = msg;
+        handleError(err);
       }
     }
 
-    async function setupPeerConnection() {
-      const config = {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      };
+    function startFrameCapture() {
+      const fps = 12;
+      const quality = 0.5; // JPEG quality
 
-      peerConnection = new RTCPeerConnection(config);
+      captureInterval = setInterval(() => {
+        if (!capturing || !video.videoWidth) return;
 
-      screenStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, screenStream);
-      });
+        // Scale down for bandwidth
+        const scale = Math.min(720 / video.videoHeight, 1);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
 
-      dataChannel = peerConnection.createDataChannel('control', { ordered: true });
-      dataChannel.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('Remote event:', data);
-      };
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
-        }
-      };
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('offer', { sessionId, offer });
-
-      screenStream.getVideoTracks()[0].onended = () => {
-        document.getElementById('status').classList.remove('active');
-        document.getElementById('trigger').style.display = 'flex';
-        document.getElementById('trigger').querySelector('span').textContent = 'Appuyez pour reconnecter';
-        started = false;
-        if (peerConnection) { peerConnection.close(); peerConnection = null; }
-      };
+        canvas.toBlob((blob) => {
+          if (blob && socket.connected) {
+            blob.arrayBuffer().then(buffer => {
+              // Send as base64 via socket (binary not supported in all socket.io transports)
+              const base64 = arrayBufferToBase64(buffer);
+              socket.emit('browser-frame', { sessionId, frame: base64, timestamp: Date.now() });
+            });
+          }
+        }, 'image/jpeg', quality);
+      }, 1000 / fps);
     }
 
-    socket.on('answer', async ({ answer }) => {
-      if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    function stopSharing() {
+      capturing = false;
+      if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
+      if (captureStream) {
+        captureStream.getTracks().forEach(t => t.stop());
+        captureStream = null;
       }
-    });
+      document.getElementById('activeScreen').classList.remove('active');
+      document.getElementById('startScreen').style.display = 'flex';
+      document.getElementById('mainMsg').textContent = 'Appuyez pour repartager';
+    }
 
-    socket.on('ice-candidate', async ({ candidate }) => {
-      if (peerConnection && candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    function handleError(err) {
+      const errorEl = document.getElementById('errorMsg');
+      const mainMsg = document.getElementById('mainMsg');
+
+      if (err.message === 'NO_CAPTURE') {
+        errorEl.innerHTML = `
+          Impossible d'accéder à la capture sur cet appareil.<br><br>
+          <strong>Solutions :</strong><br>
+          - Vérifiez que votre navigateur est à jour<br>
+          - Autorisez les permissions quand demandé<br>
+          - Alternative : installez Termux et lancez le script capture.js
+        `;
+        errorEl.style.display = 'block';
+        mainMsg.textContent = 'Appuyez pour réessayer';
+      } else if (err.name === 'NotAllowedError') {
+        mainMsg.textContent = 'Permission refusée — Appuyez et acceptez le partage';
+      } else if (err.name === 'AbortError') {
+        mainMsg.textContent = 'Annulé — Appuyez pour réessayer';
+      } else {
+        mainMsg.textContent = 'Appuyez pour réessayer';
       }
-    });
+    }
 
-    // Auto-trigger: simulate a click as soon as page loads
-    // Note: browsers require a user gesture, so we make the whole screen tappable
-    setTimeout(() => {
-      document.getElementById('trigger').querySelector('span').textContent = 'Appuyez n\'importe où';
-    }, 500);
+    function arrayBufferToBase64(buffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+    // Handle touch events from viewer (relay to display)
+    socket.on('touch-event', ({ event }) => {
+      // In browser mode, we can't simulate touches on the device
+      // This only works with native app or Termux
+      console.log('Touch event received (browser mode - limited control)', event);
+    });
   </script>
 </body>
 </html>

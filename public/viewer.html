@@ -15,57 +15,136 @@
       overflow: hidden;
     }
     .sidebar {
-      width: 280px;
+      width: 320px;
       background: #1a1a2e;
       border-right: 1px solid #2a2a4a;
-      padding: 20px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
+      overflow-y: auto;
+      max-height: 100vh;
     }
-    .sidebar h2 {
-      font-size: 1.1rem;
-      color: #667eea;
-      margin-bottom: 8px;
-    }
-    .status-panel {
+    .sidebar h2 { font-size: 1rem; color: #667eea; margin-bottom: 4px; }
+    .panel {
       background: #0f0f23;
       border-radius: 8px;
       padding: 12px;
+    }
+    .panel-title {
+      font-size: 0.8rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
     }
     .status-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 0;
-      font-size: 0.85rem;
+      padding: 4px 0;
+      font-size: 0.82rem;
     }
-    .status-badge {
+    .badge {
       padding: 2px 8px;
       border-radius: 10px;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
     }
     .badge-ok { background: #002d00; color: #00ff00; }
     .badge-wait { background: #2d2d00; color: #ffd700; }
     .badge-off { background: #2d0000; color: #ff4444; }
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .btn-ctrl {
-      padding: 10px;
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 12px;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       background: #2a2a4a;
       color: #e0e0e0;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.82rem;
+      transition: background 0.2s;
+      flex: 1;
+      min-width: 60px;
+      text-align: center;
+    }
+    .btn:hover { background: #3a3a5a; }
+    .btn.primary { background: #667eea; color: #fff; }
+    .btn.primary:hover { background: #5a6fd6; }
+    .btn.danger { background: #4a1a1a; color: #ff6666; }
+    .btn.danger:hover { background: #5a2222; }
+    .text-input-area {
+      display: flex;
+      gap: 6px;
+    }
+    .text-input-area input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      font-size: 0.85rem;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .tab {
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+    .tab.active { background: #667eea; color: #fff; border-color: #667eea; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .app-list, .file-list {
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+    }
+    .app-item, .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
       transition: background 0.2s;
     }
-    .btn-ctrl:hover { background: #3a3a5a; }
-    .btn-ctrl.active { background: #667eea; }
+    .app-item:hover, .file-item:hover { background: #1a1a3e; }
+    .file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item .size { color: #666; font-size: 0.7rem; margin-left: 8px; }
+    .file-item .actions { display: flex; gap: 4px; }
+    .file-item .actions button {
+      padding: 2px 6px;
+      border: none;
+      border-radius: 4px;
+      background: #2a2a4a;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+    .file-breadcrumb {
+      display: flex;
+      gap: 4px;
+      font-size: 0.75rem;
+      color: #888;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .file-breadcrumb span { cursor: pointer; color: #667eea; }
+    .quality-slider {
+      width: 100%;
+      accent-color: #667eea;
+    }
     .phone-container {
       flex: 1;
       display: flex;
@@ -92,11 +171,12 @@
       position: relative;
       cursor: pointer;
     }
-    #remoteVideo {
+    #remoteImage {
       width: 100%;
       height: 100%;
       object-fit: contain;
       border-radius: 28px;
+      display: none;
     }
     .touch-cursor {
       position: absolute;
@@ -110,20 +190,10 @@
       opacity: 0;
       box-shadow: 0 0 15px rgba(102, 126, 234, 0.4);
     }
-    .touch-cursor.active {
-      opacity: 1;
-      animation: touchPulse 0.3s ease-out;
-    }
-    @keyframes touchPulse {
-      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-    }
+    .touch-cursor.active { opacity: 1; }
     .waiting-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -132,96 +202,166 @@
       border-radius: 28px;
       z-index: 10;
     }
-    .waiting-overlay .spinner {
-      width: 50px;
-      height: 50px;
+    .spinner {
+      width: 50px; height: 50px;
       border: 3px solid #333;
       border-top-color: #667eea;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-bottom: 16px;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .waiting-overlay p {
-      color: #888;
-      font-size: 0.9rem;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .waiting-overlay p { color: #888; font-size: 0.9rem; text-align: center; padding: 0 20px; }
     .info-bar {
       position: fixed;
-      bottom: 0;
-      left: 280px;
-      right: 0;
+      bottom: 0; left: 320px; right: 0;
       padding: 8px 20px;
       background: #1a1a2e;
       border-top: 1px solid #2a2a4a;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: #666;
       display: flex;
       justify-content: space-between;
     }
-    .swipe-indicator {
-      position: absolute;
-      pointer-events: none;
-      z-index: 100;
+    .device-info-line { font-size: 0.75rem; color: #555; margin-top: 4px; }
+    .notification {
+      position: fixed;
+      top: 20px; right: 20px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: #1a1a2e;
+      border: 1px solid #667eea;
+      color: #e0e0e0;
+      font-size: 0.85rem;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
     }
-    .swipe-line {
-      stroke: rgba(102, 126, 234, 0.6);
-      stroke-width: 3;
-      stroke-linecap: round;
-      fill: none;
-    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   </style>
 </head>
 <body>
   <div class="sidebar">
-    <h2>🖥️ Contrôle à distance</h2>
-    
-    <div class="status-panel">
+    <h2>Android Remote Control</h2>
+
+    <!-- Status -->
+    <div class="panel">
+      <div class="panel-title">Statut</div>
       <div class="status-item">
-        <span>Mobile</span>
-        <span class="status-badge badge-wait" id="mobileStatus">En attente</span>
+        <span>Android</span>
+        <span class="badge badge-off" id="mobileStatus">Déconnecté</span>
       </div>
       <div class="status-item">
         <span>Stream</span>
-        <span class="status-badge badge-off" id="streamStatus">Inactif</span>
+        <span class="badge badge-off" id="streamStatus">Inactif</span>
       </div>
       <div class="status-item">
-        <span>Contrôle</span>
-        <span class="status-badge badge-off" id="controlStatus">Inactif</span>
+        <span>Connexion</span>
+        <span class="badge badge-wait" id="connectionType">WiFi/4G</span>
+      </div>
+      <div class="device-info-line" id="deviceInfo">En attente de connexion...</div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="panel">
+      <div class="panel-title">Navigation</div>
+      <div class="btn-row">
+        <button class="btn" onclick="sendKey('back')">← Retour</button>
+        <button class="btn" onclick="sendKey('home')">○ Accueil</button>
+        <button class="btn" onclick="sendKey('recent')">□ Récents</button>
+      </div>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="btn" onclick="sendKey('power')">⏻ Power</button>
+        <button class="btn" onclick="sendKey('volume_up')">🔊 Vol+</button>
+        <button class="btn" onclick="sendKey('volume_down')">🔉 Vol-</button>
+      </div>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="btn" onclick="sendKey('menu')">☰ Menu</button>
+        <button class="btn" onclick="sendKey('notifications')">🔔 Notifs</button>
+        <button class="btn primary" onclick="toggleFullscreen()">⛶ Plein écran</button>
       </div>
     </div>
 
-    <div class="controls">
-      <button class="btn-ctrl" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Plein écran</button>
-      <button class="btn-ctrl" id="btnBack" onclick="sendKey('back')">← Retour</button>
-      <button class="btn-ctrl" id="btnHome" onclick="sendKey('home')">○ Accueil</button>
-      <button class="btn-ctrl" id="btnRecent" onclick="sendKey('recent')">□ Apps récentes</button>
+    <!-- Text Input -->
+    <div class="panel">
+      <div class="panel-title">Saisie de texte</div>
+      <div class="text-input-area">
+        <input type="text" id="textInput" placeholder="Tapez du texte..." onkeydown="if(event.key==='Enter')sendText()">
+        <button class="btn primary" onclick="sendText()">Envoyer</button>
+      </div>
     </div>
 
-    <div class="status-panel" style="margin-top: auto;">
-      <p style="font-size: 0.8rem; color: #666; line-height: 1.4;">
-        <strong>Interactions :</strong><br>
-        • Clic = Tap<br>
-        • Glisser = Swipe<br>
-        • Molette = Scroll<br>
-        • Boutons = Navigation
-      </p>
+    <!-- Tabs: Apps / Files / Quality -->
+    <div class="panel" style="flex:1; min-height:0;">
+      <div class="tab-bar">
+        <button class="tab active" onclick="switchTab('apps')">Apps</button>
+        <button class="tab" onclick="switchTab('files')">Fichiers</button>
+        <button class="tab" onclick="switchTab('quality')">Qualité</button>
+      </div>
+
+      <!-- Apps Tab -->
+      <div class="tab-content active" id="tab-apps">
+        <button class="btn" onclick="requestApps()" style="width:100%;margin-bottom:8px;">Charger la liste des apps</button>
+        <div class="app-list" id="appList">
+          <div style="color:#555;text-align:center;padding:20px;font-size:0.8rem;">
+            Cliquez pour charger les apps installées
+          </div>
+        </div>
+      </div>
+
+      <!-- Files Tab -->
+      <div class="tab-content" id="tab-files">
+        <div class="file-breadcrumb" id="fileBreadcrumb">
+          <span onclick="navigateTo('/sdcard')">/sdcard</span>
+        </div>
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn" onclick="navigateTo('/sdcard')">📂 /sdcard</button>
+          <button class="btn" onclick="uploadFile()">⬆ Upload</button>
+        </div>
+        <div class="file-list" id="fileList">
+          <div style="color:#555;text-align:center;padding:20px;font-size:0.8rem;">
+            Naviguez dans les fichiers du téléphone
+          </div>
+        </div>
+        <input type="file" id="fileUploadInput" style="display:none" onchange="handleFileUpload(event)">
+      </div>
+
+      <!-- Quality Tab -->
+      <div class="tab-content" id="tab-quality">
+        <div style="font-size:0.8rem;margin-bottom:8px;">
+          <span>FPS: </span><span id="fpsValue">20</span>
+          <input type="range" class="quality-slider" min="5" max="30" value="20" id="fpsSlider" oninput="updateQuality()">
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:8px;">
+          <span>Qualité JPEG: </span><span id="qualityValue">70</span>%
+          <input type="range" class="quality-slider" min="10" max="100" value="70" id="qualitySlider" oninput="updateQuality()">
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:8px;">
+          <span>Résolution: </span>
+          <select id="resolutionSelect" onchange="updateQuality()" style="background:#0a0a1a;color:#e0e0e0;border:1px solid #333;border-radius:4px;padding:4px;">
+            <option value="480">480p</option>
+            <option value="720" selected>720p</option>
+            <option value="1080">1080p</option>
+          </select>
+        </div>
+        <button class="btn primary" onclick="updateQuality()" style="width:100%;">Appliquer</button>
+        <div style="font-size:0.75rem;color:#555;margin-top:8px;" id="bandwidthInfo">
+          Bande passante: --
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Phone Screen -->
   <div class="phone-container">
     <div class="phone-frame">
       <div class="phone-screen" id="phoneScreen">
-        <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
-        <img id="remoteImage" style="width:100%;height:100%;object-fit:contain;border-radius:28px;display:none;" />
+        <img id="remoteImage" />
         <div class="touch-cursor" id="touchCursor"></div>
         <div class="waiting-overlay" id="waitingOverlay">
           <div class="spinner"></div>
-          <p>En attente du partage d'écran...</p>
-          <p style="margin-top: 8px; font-size: 0.8rem; color: #555;">
-            Ouvrez le lien mobile sur votre Android
+          <p>En attente de l'app Android...</p>
+          <p style="margin-top:8px;font-size:0.8rem;color:#555;">
+            L'app se connecte via WiFi/4G.<br>Aucun USB requis.
           </p>
         </div>
       </div>
@@ -232,168 +372,121 @@
     <span id="resolutionInfo">Résolution: --</span>
     <span id="fpsInfo">FPS: --</span>
     <span id="latencyInfo">Latence: --</span>
+    <span id="sizeInfo">Taille: --</span>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    let peerConnection = null;
-    let dataChannel = null;
     let isStreaming = false;
+    let currentFilePath = '/sdcard';
 
     const phoneScreen = document.getElementById('phoneScreen');
-    const remoteVideo = document.getElementById('remoteVideo');
     const remoteImage = document.getElementById('remoteImage');
     const waitingOverlay = document.getElementById('waitingOverlay');
     const touchCursor = document.getElementById('touchCursor');
-    const mobileStatus = document.getElementById('mobileStatus');
-    const streamStatus = document.getElementById('streamStatus');
-    const controlStatus = document.getElementById('controlStatus');
 
-    // Join session as viewer
+    // Join session
     socket.emit('join-session', { sessionId, role: 'viewer' });
 
+    // ===== Session Updates =====
     socket.on('session-update', (session) => {
+      const el = document.getElementById('mobileStatus');
       if (session.androidConnected) {
-        mobileStatus.textContent = 'Connecté';
-        mobileStatus.className = 'status-badge badge-ok';
+        el.textContent = 'Connecté';
+        el.className = 'badge badge-ok';
       } else {
-        mobileStatus.textContent = 'Déconnecté';
-        mobileStatus.className = 'status-badge badge-off';
+        el.textContent = 'Déconnecté';
+        el.className = 'badge badge-off';
+        isStreaming = false;
+        waitingOverlay.style.display = 'flex';
+        document.getElementById('streamStatus').textContent = 'Inactif';
+        document.getElementById('streamStatus').className = 'badge badge-off';
+      }
+      if (session.deviceInfo) {
+        document.getElementById('deviceInfo').textContent =
+          `${session.deviceInfo.model} | Android ${session.deviceInfo.androidVersion}`;
       }
     });
 
-    // Handle frames from native Android app (via MediaProjection or ADB)
-    socket.on('screen-frame', ({ frame, timestamp }) => {
-      remoteImage.src = 'data:image/png;base64,' + frame;
+    // ===== Screen Streaming =====
+    let frameCount = 0;
+    let lastFpsTime = Date.now();
+    let totalBytes = 0;
+
+    socket.on('screen-frame', ({ frame, timestamp, size }) => {
+      remoteImage.src = 'data:image/jpeg;base64,' + frame;
       remoteImage.style.display = 'block';
-      remoteVideo.style.display = 'none';
       waitingOverlay.style.display = 'none';
+
       if (!isStreaming) {
         isStreaming = true;
-        streamStatus.textContent = 'Actif';
-        streamStatus.className = 'status-badge badge-ok';
-        controlStatus.textContent = 'Actif';
-        controlStatus.className = 'status-badge badge-ok';
+        document.getElementById('streamStatus').textContent = 'Actif';
+        document.getElementById('streamStatus').className = 'badge badge-ok';
       }
-      // FPS tracking
+
       frameCount++;
-    });
-
-    // Handle offer from mobile (WebRTC browser fallback)
-    socket.on('offer', async ({ offer }) => {
-      const config = {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      };
-
-      peerConnection = new RTCPeerConnection(config);
-
-      // Handle incoming stream (WebRTC)
-      peerConnection.ontrack = (event) => {
-        remoteVideo.srcObject = event.streams[0];
-        remoteVideo.style.display = 'block';
-        remoteImage.style.display = 'none';
-        waitingOverlay.style.display = 'none';
-        isStreaming = true;
-        streamStatus.textContent = 'Actif';
-        streamStatus.className = 'status-badge badge-ok';
-        
-        // Update resolution info
-        remoteVideo.onloadedmetadata = () => {
-          document.getElementById('resolutionInfo').textContent = 
-            `Résolution: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`;
-        };
-      };
-
-      // Handle data channel
-      peerConnection.ondatachannel = (event) => {
-        dataChannel = event.channel;
-        dataChannel.onopen = () => {
-          controlStatus.textContent = 'Actif';
-          controlStatus.className = 'status-badge badge-ok';
-        };
-        dataChannel.onclose = () => {
-          controlStatus.textContent = 'Inactif';
-          controlStatus.className = 'status-badge badge-off';
-        };
-      };
-
-      // ICE candidates
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
-        }
-      };
-
-      peerConnection.onconnectionstatechange = () => {
-        if (peerConnection.connectionState === 'disconnected' || 
-            peerConnection.connectionState === 'failed') {
-          waitingOverlay.style.display = 'flex';
-          isStreaming = false;
-          streamStatus.textContent = 'Déconnecté';
-          streamStatus.className = 'status-badge badge-off';
-        }
-      };
-
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      socket.emit('answer', { sessionId, answer });
-    });
-
-    // Handle ICE candidates
-    socket.on('ice-candidate', async ({ candidate }) => {
-      if (peerConnection && candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      totalBytes += (size || 0);
+      const now = Date.now();
+      if (now - lastFpsTime >= 1000) {
+        document.getElementById('fpsInfo').textContent = `FPS: ${frameCount}`;
+        document.getElementById('sizeInfo').textContent = `Débit: ${(totalBytes / 1024).toFixed(0)} KB/s`;
+        document.getElementById('latencyInfo').textContent = `Latence: ${now - timestamp}ms`;
+        frameCount = 0;
+        totalBytes = 0;
+        lastFpsTime = now;
       }
     });
 
-    // ===== Touch/Mouse Controls =====
+    // ===== Device Info =====
+    socket.on('device-info', (info) => {
+      document.getElementById('deviceInfo').textContent =
+        `${info.model} | Android ${info.androidVersion} | ${info.screenWidth}x${info.screenHeight}`;
+      document.getElementById('resolutionInfo').textContent =
+        `Résolution: ${info.screenWidth}x${info.screenHeight}`;
+    });
+
+    // ===== Touch Controls =====
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
-    let dragEnd = { x: 0, y: 0 };
+    let dragStartTime = 0;
 
     function getRelativePosition(e) {
       const rect = phoneScreen.getBoundingClientRect();
       return {
-        x: (e.clientX - rect.left) / rect.width,
-        y: (e.clientY - rect.top) / rect.height
+        x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
       };
     }
 
     phoneScreen.addEventListener('mousedown', (e) => {
       if (!isStreaming) return;
+      e.preventDefault();
       isDragging = true;
       dragStart = getRelativePosition(e);
+      dragStartTime = Date.now();
       showCursor(e);
     });
 
     phoneScreen.addEventListener('mousemove', (e) => {
-      if (!isStreaming || !isDragging) return;
-      dragEnd = getRelativePosition(e);
+      if (!isDragging) return;
       moveCursor(e);
     });
 
     phoneScreen.addEventListener('mouseup', (e) => {
-      if (!isStreaming) return;
-      dragEnd = getRelativePosition(e);
-      
+      if (!isStreaming || !isDragging) return;
+      const dragEnd = getRelativePosition(e);
       const dx = dragEnd.x - dragStart.x;
       const dy = dragEnd.y - dragStart.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
+      const duration = Date.now() - dragStartTime;
 
       if (distance < 0.02) {
-        // It's a tap
         sendTouchEvent('tap', dragStart.x, dragStart.y);
       } else {
-        // It's a swipe
-        sendTouchEvent('swipe', dragStart.x, dragStart.y, dragEnd.x, dragEnd.y);
+        sendTouchEvent('swipe', dragStart.x, dragStart.y, dragEnd.x, dragEnd.y, duration);
       }
-
       isDragging = false;
       hideCursor();
     });
@@ -406,64 +499,226 @@
       sendTouchEvent('scroll', pos.x, pos.y, 0, 0, direction);
     });
 
+    // Pinch-to-zoom via keyboard shortcut
+    document.addEventListener('keydown', (e) => {
+      if (!isStreaming) return;
+      if (e.key === '+' && e.ctrlKey) { e.preventDefault(); sendTouchEvent('pinch', 0.5, 0.5, 0, 0, 'in'); }
+      if (e.key === '-' && e.ctrlKey) { e.preventDefault(); sendTouchEvent('pinch', 0.5, 0.5, 0, 0, 'out'); }
+    });
+
     function sendTouchEvent(type, x, y, endX, endY, extra) {
-      const event = { type, x, y, endX, endY, extra, timestamp: Date.now() };
-      
-      // Send via data channel if available
-      if (dataChannel && dataChannel.readyState === 'open') {
-        dataChannel.send(JSON.stringify(event));
-      }
-      
-      // Also send via socket as fallback
-      socket.emit('touch-event', { sessionId, event });
+      socket.emit('touch-event', {
+        sessionId,
+        event: { type, x, y, endX, endY, extra, timestamp: Date.now() }
+      });
     }
 
+    // ===== System Keys =====
     function sendKey(key) {
-      sendTouchEvent('key', 0, 0, 0, 0, key);
+      socket.emit('system-key', { sessionId, key });
     }
 
+    // ===== Text Input =====
+    function sendText() {
+      const input = document.getElementById('textInput');
+      const text = input.value.trim();
+      if (!text) return;
+      socket.emit('text-input', { sessionId, text });
+      input.value = '';
+      notify(`Texte envoyé: "${text}"`);
+    }
+
+    // ===== Apps =====
+    function requestApps() {
+      socket.emit('get-apps', { sessionId });
+      document.getElementById('appList').innerHTML = '<div style="color:#888;text-align:center;padding:10px;">Chargement...</div>';
+    }
+
+    socket.on('app-list', (apps) => {
+      const list = document.getElementById('appList');
+      if (!apps || apps.length === 0) {
+        list.innerHTML = '<div style="color:#555;text-align:center;padding:10px;">Aucune app trouvée</div>';
+        return;
+      }
+      list.innerHTML = apps.map(app => `
+        <div class="app-item">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${app.name}</span>
+          <button class="btn" style="padding:3px 8px;font-size:0.7rem;" onclick="launchApp('${app.packageName}')">Ouvrir</button>
+          <button class="btn danger" style="padding:3px 8px;font-size:0.7rem;" onclick="closeApp('${app.packageName}')">Fermer</button>
+        </div>
+      `).join('');
+    });
+
+    function launchApp(pkg) {
+      socket.emit('launch-app', { sessionId, packageName: pkg });
+      notify(`Lancement: ${pkg}`);
+    }
+
+    function closeApp(pkg) {
+      socket.emit('close-app', { sessionId, packageName: pkg });
+      notify(`Fermeture: ${pkg}`);
+    }
+
+    // ===== File Manager =====
+    function navigateTo(dirPath) {
+      currentFilePath = dirPath;
+      socket.emit('file-list', { sessionId, dirPath });
+      updateBreadcrumb(dirPath);
+      document.getElementById('fileList').innerHTML = '<div style="color:#888;text-align:center;padding:10px;">Chargement...</div>';
+    }
+
+    function updateBreadcrumb(filePath) {
+      const parts = filePath.split('/').filter(Boolean);
+      let html = '';
+      let accumulated = '';
+      parts.forEach((part, i) => {
+        accumulated += '/' + part;
+        const p = accumulated;
+        html += `<span onclick="navigateTo('${p}')">${part}</span>`;
+        if (i < parts.length - 1) html += ' / ';
+      });
+      document.getElementById('fileBreadcrumb').innerHTML = html;
+    }
+
+    socket.on('file-list-result', ({ path: dirPath, files }) => {
+      const list = document.getElementById('fileList');
+      if (!files || files.length === 0) {
+        list.innerHTML = '<div style="color:#555;text-align:center;padding:10px;">Dossier vide</div>';
+        return;
+      }
+      list.innerHTML = files.map(f => {
+        const icon = f.isDirectory ? '📁' : '📄';
+        const sizeStr = f.isDirectory ? '' : formatSize(f.size);
+        const clickAction = f.isDirectory ? `navigateTo('${dirPath}/${f.name}')` : '';
+        return `
+          <div class="file-item" ${clickAction ? `onclick="${clickAction}"` : ''}>
+            <span class="name">${icon} ${f.name}</span>
+            <span class="size">${sizeStr}</span>
+            <span class="actions">
+              ${!f.isDirectory ? `<button onclick="event.stopPropagation();downloadFile('${dirPath}/${f.name}')">⬇</button>` : ''}
+              <button onclick="event.stopPropagation();deleteFile('${dirPath}/${f.name}')">🗑</button>
+            </span>
+          </div>
+        `;
+      }).join('');
+    });
+
+    function downloadFile(filePath) {
+      socket.emit('file-download', { sessionId, filePath });
+      notify('Téléchargement en cours...');
+    }
+
+    socket.on('file-download-result', ({ name, data, mimeType }) => {
+      const blob = b64toBlob(data, mimeType || 'application/octet-stream');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify(`Téléchargé: ${name}`);
+    });
+
+    function uploadFile() {
+      document.getElementById('fileUploadInput').click();
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        socket.emit('file-upload', {
+          sessionId,
+          filePath: currentFilePath + '/' + file.name,
+          data: base64
+        });
+        notify(`Upload: ${file.name}`);
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function deleteFile(filePath) {
+      if (confirm(`Supprimer ${filePath} ?`)) {
+        socket.emit('file-delete', { sessionId, filePath });
+        notify('Suppression...');
+        setTimeout(() => navigateTo(currentFilePath), 500);
+      }
+    }
+
+    socket.on('file-operation-result', (msg) => {
+      notify(msg.success ? 'Opération réussie' : `Erreur: ${msg.error}`);
+      if (msg.success) navigateTo(currentFilePath);
+    });
+
+    // ===== Quality Control =====
+    function updateQuality() {
+      const fps = document.getElementById('fpsSlider').value;
+      const quality = document.getElementById('qualitySlider').value;
+      const resolution = document.getElementById('resolutionSelect').value;
+      document.getElementById('fpsValue').textContent = fps;
+      document.getElementById('qualityValue').textContent = quality;
+      socket.emit('set-quality', { sessionId, quality: { fps: +fps, jpegQuality: +quality, maxHeight: +resolution } });
+    }
+
+    socket.on('bandwidth-report', (data) => {
+      document.getElementById('bandwidthInfo').textContent =
+        `Bande passante: ${(data.bytesPerSec / 1024).toFixed(0)} KB/s | Frames perdues: ${data.droppedFrames || 0}`;
+    });
+
+    // ===== Tabs =====
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+    }
+
+    // ===== Helpers =====
     function showCursor(e) {
       const rect = phoneScreen.getBoundingClientRect();
       touchCursor.style.left = (e.clientX - rect.left) + 'px';
       touchCursor.style.top = (e.clientY - rect.top) + 'px';
       touchCursor.classList.add('active');
     }
-
     function moveCursor(e) {
       const rect = phoneScreen.getBoundingClientRect();
       touchCursor.style.left = (e.clientX - rect.left) + 'px';
       touchCursor.style.top = (e.clientY - rect.top) + 'px';
     }
-
-    function hideCursor() {
-      setTimeout(() => touchCursor.classList.remove('active'), 300);
-    }
+    function hideCursor() { setTimeout(() => touchCursor.classList.remove('active'), 200); }
 
     function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
     }
 
-    // FPS counter
-    let frameCount = 0;
-    let lastFpsUpdate = Date.now();
-    
-    function updateFps() {
-      if (isStreaming && remoteVideo.srcObject) {
-        const now = Date.now();
-        frameCount++;
-        if (now - lastFpsUpdate >= 1000) {
-          document.getElementById('fpsInfo').textContent = `FPS: ${frameCount}`;
-          frameCount = 0;
-          lastFpsUpdate = now;
-        }
-      }
-      requestAnimationFrame(updateFps);
+    function formatSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
-    updateFps();
+
+    function b64toBlob(b64, type) {
+      const binary = atob(b64);
+      const arr = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+      return new Blob([arr], { type });
+    }
+
+    function notify(msg) {
+      const el = document.createElement('div');
+      el.className = 'notification';
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    // ===== Error handling =====
+    socket.on('android-error', ({ message }) => notify(`Erreur Android: ${message}`));
   </script>
 </body>
 </html>

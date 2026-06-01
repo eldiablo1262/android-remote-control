@@ -22,14 +22,23 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .subtitle {
+    .subtitle { text-align: center; color: #888; margin-bottom: 20px; }
+    .mode-badge {
       text-align: center;
-      color: #888;
-      margin-bottom: 40px;
+      margin-bottom: 30px;
+    }
+    .mode-badge span {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: #002d00;
+      color: #00ff88;
+      font-size: 0.85rem;
+      font-weight: 600;
     }
     .btn-create {
       display: block;
-      margin: 0 auto 40px;
+      margin: 0 auto 30px;
       padding: 16px 40px;
       font-size: 1.1rem;
       font-weight: 600;
@@ -44,6 +53,37 @@
       transform: translateY(-2px);
       box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
     }
+    .how-it-works {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    .how-it-works h3 { color: #667eea; margin-bottom: 12px; font-size: 1rem; }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .step {
+      background: #0f0f23;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .step .num {
+      display: inline-block;
+      width: 28px; height: 28px;
+      line-height: 28px;
+      border-radius: 50%;
+      background: #667eea;
+      color: white;
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+    .step p { font-size: 0.85rem; color: #aaa; line-height: 1.4; }
     .sessions-list { display: flex; flex-direction: column; gap: 16px; }
     .session-card {
       background: #1a1a2e;
@@ -59,11 +99,7 @@
       align-items: center;
       margin-bottom: 12px;
     }
-    .session-id {
-      font-family: monospace;
-      font-size: 0.85rem;
-      color: #888;
-    }
+    .session-id { font-family: monospace; font-size: 0.85rem; color: #888; }
     .status {
       padding: 4px 12px;
       border-radius: 20px;
@@ -73,6 +109,7 @@
     .status.waiting { background: #2d2d00; color: #ffd700; }
     .status.connected { background: #002d00; color: #00ff00; }
     .status.streaming { background: #00002d; color: #00bfff; }
+    .device-badge { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
     .links-section { margin-top: 12px; }
     .link-row {
       display: flex;
@@ -80,11 +117,7 @@
       gap: 10px;
       margin-bottom: 8px;
     }
-    .link-label {
-      font-size: 0.85rem;
-      color: #aaa;
-      min-width: 120px;
-    }
+    .link-label { font-size: 0.85rem; color: #aaa; min-width: 140px; }
     .link-input {
       flex: 1;
       padding: 8px 12px;
@@ -92,7 +125,7 @@
       border: 1px solid #333;
       border-radius: 8px;
       color: #e0e0e0;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-family: monospace;
     }
     .btn-copy {
@@ -119,21 +152,36 @@
       transition: background 0.2s;
     }
     .btn-open:hover { background: #5a6fd6; }
-    .empty-state {
-      text-align: center;
-      padding: 60px;
-      color: #555;
-    }
+    .empty-state { text-align: center; padding: 60px; color: #555; }
     .empty-state svg { margin-bottom: 20px; opacity: 0.3; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📱 Android Remote Control</h1>
-    <p class="subtitle">Générez un lien, envoyez-le sur votre Android, et prenez le contrôle</p>
-    
+    <h1>Android Remote Control</h1>
+    <p class="subtitle">Contrôlez votre Android depuis n'importe où dans le monde</p>
+    <div class="mode-badge"><span>WiFi / 4G / Internet — Aucun USB requis</span></div>
+
+    <div class="how-it-works">
+      <h3>Comment ça marche</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="num">1</div>
+          <p>Créez une session (bouton ci-dessous)</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <p>Ouvrez le lien Mobile sur n'importe quel navigateur du téléphone</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <p>Ouvrez le Viewer sur PC — contrôlez le téléphone à distance</p>
+        </div>
+      </div>
+    </div>
+
     <button class="btn-create" onclick="createSession()">+ Nouvelle Session</button>
-    
+
     <div id="sessions" class="sessions-list">
       <div class="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -162,6 +210,11 @@
       renderSessions();
     }
 
+    function getWsUrl(sessionId) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${location.host}/ws/android/${sessionId}`;
+    }
+
     function renderSessions() {
       const container = document.getElementById('sessions');
       if (sessions.length === 0) {
@@ -174,6 +227,7 @@
             <span class="session-id">Session: ${s.id.substring(0, 8)}...</span>
             <span class="status ${s.status}">${s.status === 'waiting' ? '⏳ En attente' : s.status === 'connected' ? '✅ Connecté' : '📡 Streaming'}</span>
           </div>
+          ${s.deviceInfo ? `<div class="device-badge">📱 ${s.deviceInfo.model} — Android ${s.deviceInfo.androidVersion}</div>` : ''}
           <div class="links-section">
             <div class="link-row">
               <span class="link-label">📱 Lien Mobile :</span>
@@ -181,10 +235,15 @@
               <button class="btn-copy" onclick="copyLink('mobile-${s.id}', this)">Copier</button>
             </div>
             <div class="link-row">
-              <span class="link-label">🖥️ Lien Viewer :</span>
+              <span class="link-label">🖥️ Viewer (PC) :</span>
               <input class="link-input" readonly value="${location.origin}/viewer/${s.id}" id="viewer-${s.id}">
               <button class="btn-copy" onclick="copyLink('viewer-${s.id}', this)">Copier</button>
               <a class="btn-open" href="/viewer/${s.id}" target="_blank">Ouvrir</a>
+            </div>
+            <div class="link-row">
+              <span class="link-label">🔌 WebSocket (Termux) :</span>
+              <input class="link-input" readonly value="${getWsUrl(s.id)}" id="ws-${s.id}">
+              <button class="btn-copy" onclick="copyLink('ws-${s.id}', this)">Copier</button>
             </div>
           </div>
         </div>
@@ -196,16 +255,13 @@
       navigator.clipboard.writeText(input.value);
       btn.textContent = '✓ Copié';
       btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = 'Copier';
-        btn.classList.remove('copied');
-      }, 2000);
+      setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
     }
 
-    // Listen for session updates
     socket.on('session-update', (session) => {
       const idx = sessions.findIndex(s => s.id === session.id);
       if (idx >= 0) sessions[idx] = session;
+      else sessions.push(session);
       renderSessions();
     });
 

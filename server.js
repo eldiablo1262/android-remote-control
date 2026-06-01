@@ -4,16 +4,20 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const WebSocket = require('ws');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' },
-  maxHttpBufferSize: 10e6 // 10MB for large frames
-});
 
 const PORT = process.env.PORT || 3000;
+
+// On Render/cloud: they handle HTTPS. Locally: just HTTP (use ngrok/cloudflare for HTTPS)
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: '*' },
+  maxHttpBufferSize: 50e6 // 50MB for file transfers
+});
 
 // Store active sessions
 const sessions = new Map();
@@ -21,7 +25,7 @@ const sessions = new Map();
 const androidSockets = new Map();
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Main dashboard
 app.get('/', (req, res) => {
@@ -36,15 +40,16 @@ app.post('/api/create-session', (req, res) => {
     created: Date.now(),
     status: 'waiting', // waiting, connected, streaming
     androidConnected: false,
-    viewerConnected: false
+    viewerConnected: false,
+    deviceInfo: null
   });
 
   const host = req.headers.host;
   const protocol = req.protocol;
-  const link = `${protocol}://${host}/mobile/${sessionId}`;
   const viewerLink = `${protocol}://${host}/viewer/${sessionId}`;
+  const wsLink = `ws://${host}/ws/android/${sessionId}`;
 
-  res.json({ sessionId, link, viewerLink });
+  res.json({ sessionId, viewerLink, wsLink });
 });
 
 // Get all sessions
@@ -53,7 +58,7 @@ app.get('/api/sessions', (req, res) => {
   res.json(sessionList);
 });
 
-// Mobile page (opened on Android browser - fallback)
+// Mobile setup page (shows WebSocket URL for Android app)
 app.get('/mobile/:sessionId', (req, res) => {
   const { sessionId } = req.params;
   if (!sessions.has(sessionId)) {
@@ -71,9 +76,9 @@ app.get('/viewer/:sessionId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
 });
 
-// Socket.IO for signaling + frame relay to viewers
+// Socket.IO for viewers (PC browser)
 io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Connected: ${socket.id}`);
+  console.log(`[Viewer] Connected: ${socket.id}`);
 
   socket.on('join-session', ({ sessionId, role }) => {
     socket.join(sessionId);
@@ -83,66 +88,128 @@ io.on('connection', (socket) => {
     const session = sessions.get(sessionId);
     if (!session) return;
 
-    if (role === 'mobile') {
-      session.androidConnected = true;
-      session.status = 'connected';
-      io.to(sessionId).emit('session-update', session);
-      console.log(`[Session ${sessionId}] Mobile joined`);
-    } else if (role === 'viewer') {
+    if (role === 'viewer') {
       session.viewerConnected = true;
       io.to(sessionId).emit('session-update', session);
       console.log(`[Session ${sessionId}] Viewer joined`);
-      socket.to(sessionId).emit('viewer-ready');
+      // Notify Android that viewer is ready
+      const androidWs = androidSockets.get(sessionId);
+      if (androidWs && androidWs.readyState === WebSocket.OPEN) {
+        androidWs.send(JSON.stringify({ type: 'viewer-ready' }));
+      }
+    } else if (role === 'mobile') {
+      session.androidConnected = true;
+      session.status = 'connected';
+      io.to(sessionId).emit('session-update', session);
+      console.log(`[Session ${sessionId}] Mobile browser joined`);
     }
   });
 
-  // WebRTC signaling (fallback browser mode)
-  socket.on('offer', ({ sessionId, offer }) => {
-    socket.to(sessionId).emit('offer', { offer });
+  // Frames from mobile browser (getDisplayMedia capture)
+  socket.on('browser-frame', ({ sessionId, frame, timestamp }) => {
+    const session = sessions.get(sessionId);
+    if (session && !session.status !== 'streaming') {
+      session.status = 'streaming';
+      session.androidConnected = true;
+    }
+    // Relay to viewers
+    socket.to(sessionId).emit('screen-frame', {
+      frame,
+      timestamp,
+      size: frame.length
+    });
   });
 
-  socket.on('answer', ({ sessionId, answer }) => {
-    socket.to(sessionId).emit('answer', { answer });
-  });
+  // ===== Commands from Viewer -> Android =====
 
-  socket.on('ice-candidate', ({ sessionId, candidate }) => {
-    socket.to(sessionId).emit('ice-candidate', { candidate });
-  });
-
-  // Touch events from viewer -> relay to Android via WebSocket
+  // Touch/gesture events
   socket.on('touch-event', ({ sessionId, event }) => {
-    // Forward to native Android WebSocket client
-    const androidWs = androidSockets.get(sessionId);
-    if (androidWs && androidWs.readyState === WebSocket.OPEN) {
-      androidWs.send(JSON.stringify({ type: 'touch', event }));
-    }
-    // Also relay via Socket.IO (browser fallback)
-    socket.to(sessionId).emit('touch-event', { event });
+    sendToAndroid(sessionId, { type: 'touch', event });
+  });
+
+  // Text input
+  socket.on('text-input', ({ sessionId, text }) => {
+    sendToAndroid(sessionId, { type: 'text-input', text });
+  });
+
+  // System key
+  socket.on('system-key', ({ sessionId, key }) => {
+    sendToAndroid(sessionId, { type: 'system-key', key });
+  });
+
+  // Launch app
+  socket.on('launch-app', ({ sessionId, packageName }) => {
+    sendToAndroid(sessionId, { type: 'launch-app', packageName });
+  });
+
+  // Close app
+  socket.on('close-app', ({ sessionId, packageName }) => {
+    sendToAndroid(sessionId, { type: 'close-app', packageName });
+  });
+
+  // Request app list
+  socket.on('get-apps', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'get-apps' });
+  });
+
+  // File operations
+  socket.on('file-list', ({ sessionId, dirPath }) => {
+    sendToAndroid(sessionId, { type: 'file-list', path: dirPath });
+  });
+
+  socket.on('file-download', ({ sessionId, filePath }) => {
+    sendToAndroid(sessionId, { type: 'file-download', path: filePath });
+  });
+
+  socket.on('file-upload', ({ sessionId, filePath, data }) => {
+    sendToAndroid(sessionId, { type: 'file-upload', path: filePath, data });
+  });
+
+  socket.on('file-delete', ({ sessionId, filePath }) => {
+    sendToAndroid(sessionId, { type: 'file-delete', path: filePath });
+  });
+
+  socket.on('file-rename', ({ sessionId, oldPath, newPath }) => {
+    sendToAndroid(sessionId, { type: 'file-rename', oldPath, newPath });
+  });
+
+  // Stream quality control
+  socket.on('set-quality', ({ sessionId, quality }) => {
+    sendToAndroid(sessionId, { type: 'set-quality', quality });
   });
 
   socket.on('disconnect', () => {
     const { sessionId, role } = socket;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId);
-      if (role === 'mobile') {
+      if (role === 'viewer') {
+        session.viewerConnected = false;
+        sendToAndroid(sessionId, { type: 'viewer-disconnected' });
+      } else if (role === 'mobile') {
         session.androidConnected = false;
         session.status = 'waiting';
-      } else if (role === 'viewer') {
-        session.viewerConnected = false;
       }
       io.to(sessionId).emit('session-update', session);
     }
-    console.log(`[Socket.IO] Disconnected: ${socket.id}`);
+    console.log(`[Socket.IO] Disconnected: ${socket.id} (${socket.role || 'unknown'})`);
   });
 });
 
-// ===== Raw WebSocket server for native Android app =====
+// Helper: send JSON to Android WebSocket
+function sendToAndroid(sessionId, msg) {
+  const androidWs = androidSockets.get(sessionId);
+  if (androidWs && androidWs.readyState === WebSocket.OPEN) {
+    androidWs.send(JSON.stringify(msg));
+  }
+}
+
+// ===== Raw WebSocket for Android app (connects over WiFi/4G/Internet) =====
 const wss = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
-  
-  // Only handle /ws/android/:sessionId
+
+  // Handle /ws/android/:sessionId
   const match = url.pathname.match(/^\/ws\/android\/(.+)$/);
   if (match) {
     const sessionId = match[1];
@@ -163,7 +230,7 @@ server.on('upgrade', (request, socket, head) => {
 
 wss.on('connection', (ws) => {
   const sessionId = ws.sessionId;
-  console.log(`[Android WS] Connected for session: ${sessionId}`);
+  console.log(`[Android] Connected for session: ${sessionId}`);
 
   androidSockets.set(sessionId, ws);
 
@@ -175,22 +242,27 @@ wss.on('connection', (ws) => {
     io.to(sessionId).emit('session-update', session);
   }
 
+  // Send config to Android
+  ws.send(JSON.stringify({
+    type: 'config',
+    streaming: { fps: 20, quality: 70, codec: 'h264' }
+  }));
+
   ws.on('message', (data, isBinary) => {
     if (isBinary) {
-      // Binary data = JPEG frame from MediaProjection
-      // Convert to base64 and relay to viewers via Socket.IO
+      // Binary data = H.264 NAL units or JPEG frames
+      // Relay to viewers as binary (base64 for Socket.IO)
       const base64Frame = data.toString('base64');
       io.to(sessionId).emit('screen-frame', {
         frame: base64Frame,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        size: data.length
       });
     } else {
-      // Text data = JSON messages (status, info, etc.)
+      // Text data = JSON messages from Android
       try {
         const msg = JSON.parse(data.toString());
-        if (msg.type === 'info') {
-          console.log(`[Android] ${sessionId}: ${msg.message}`);
-        }
+        handleAndroidMessage(sessionId, msg);
       } catch (e) {
         // ignore
       }
@@ -198,20 +270,85 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log(`[Android WS] Disconnected: ${sessionId}`);
+    console.log(`[Android] Disconnected: ${sessionId}`);
     androidSockets.delete(sessionId);
     const session = sessions.get(sessionId);
     if (session) {
       session.androidConnected = false;
       session.status = 'waiting';
+      session.deviceInfo = null;
       io.to(sessionId).emit('session-update', session);
     }
   });
 
   ws.on('error', (err) => {
-    console.error(`[Android WS] Error: ${err.message}`);
+    console.error(`[Android] Error: ${err.message}`);
   });
+
+  // Ping/pong keep-alive for mobile networks
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    } else {
+      clearInterval(pingInterval);
+    }
+  }, 15000);
+
+  ws.on('close', () => clearInterval(pingInterval));
 });
+
+// Handle JSON messages from Android
+function handleAndroidMessage(sessionId, msg) {
+  switch (msg.type) {
+    case 'device-info':
+      const session = sessions.get(sessionId);
+      if (session) {
+        session.deviceInfo = msg.data;
+        io.to(sessionId).emit('session-update', session);
+      }
+      io.to(sessionId).emit('device-info', msg.data);
+      console.log(`[Android] ${sessionId} device: ${msg.data.model} (${msg.data.androidVersion})`);
+      break;
+
+    case 'app-list':
+      io.to(sessionId).emit('app-list', msg.apps);
+      break;
+
+    case 'file-list-result':
+      io.to(sessionId).emit('file-list-result', { path: msg.path, files: msg.files });
+      break;
+
+    case 'file-download-result':
+      io.to(sessionId).emit('file-download-result', {
+        path: msg.path,
+        name: msg.name,
+        data: msg.data,
+        mimeType: msg.mimeType
+      });
+      break;
+
+    case 'file-operation-result':
+      io.to(sessionId).emit('file-operation-result', msg);
+      break;
+
+    case 'error':
+      io.to(sessionId).emit('android-error', { message: msg.message });
+      console.log(`[Android] ${sessionId} error: ${msg.message}`);
+      break;
+
+    case 'info':
+      console.log(`[Android] ${sessionId}: ${msg.message}`);
+      break;
+
+    case 'bandwidth-report':
+      io.to(sessionId).emit('bandwidth-report', msg.data);
+      break;
+
+    default:
+      // Forward unknown messages to viewers
+      io.to(sessionId).emit('android-message', msg);
+  }
+}
 
 // Get local IP for network access
 function getLocalIP() {
@@ -228,14 +365,19 @@ function getLocalIP() {
 
 server.listen(PORT, '0.0.0.0', () => {
   const localIP = getLocalIP();
-  console.log(`\n========================================`);
+  const isCloud = !!process.env.RENDER || !!process.env.RAILWAY_STATIC_URL || !!process.env.HEROKU_APP_NAME;
+  console.log(`\n=============================================`);
   console.log(`  Android Remote Control Server`);
-  console.log(`========================================`);
-  console.log(`  Dashboard:  http://localhost:${PORT}`);
-  console.log(`  Network:    http://${localIP}:${PORT}`);
-  console.log(`  Android WS: ws://${localIP}:${PORT}/ws/android/<sessionId>`);
-  console.log(`========================================`);
-  console.log(`\n  1. Open dashboard, create a session`);
-  console.log(`  2. Configure Android app with session ID`);
-  console.log(`  3. Open viewer to see the screen\n`);
+  console.log(`=============================================`);
+  if (isCloud) {
+    console.log(`  Mode: CLOUD (HTTPS provided by platform)`);
+    console.log(`  Port: ${PORT}`);
+  } else {
+    console.log(`  Dashboard:    http://localhost:${PORT}`);
+    console.log(`  LAN:          http://${localIP}:${PORT}`);
+    console.log(`  WebSocket:    ws://${localIP}:${PORT}/ws/android/<sessionId>`);
+  }
+  console.log(`=============================================`);
+  console.log(`  WiFi / 4G / Internet — NO USB`);
+  console.log(`=============================================\n`);
 });
