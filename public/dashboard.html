@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Remote Control - Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 40px;
+    }
+    .btn-create {
+      display: block;
+      margin: 0 auto 40px;
+      padding: 16px 40px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-create:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    .sessions-list { display: flex; flex-direction: column; gap: 16px; }
+    .session-card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 20px;
+      transition: border-color 0.3s;
+    }
+    .session-card:hover { border-color: #667eea; }
+    .session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .session-id {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .status {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .status.waiting { background: #2d2d00; color: #ffd700; }
+    .status.connected { background: #002d00; color: #00ff00; }
+    .status.streaming { background: #00002d; color: #00bfff; }
+    .links-section { margin-top: 12px; }
+    .link-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .link-label {
+      font-size: 0.85rem;
+      color: #aaa;
+      min-width: 120px;
+    }
+    .link-input {
+      flex: 1;
+      padding: 8px 12px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 0.85rem;
+      font-family: monospace;
+    }
+    .btn-copy {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #333;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    .btn-copy:hover { background: #555; }
+    .btn-copy.copied { background: #2d5a2d; color: #00ff00; }
+    .btn-open {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #667eea;
+      color: white;
+      cursor: pointer;
+      font-size: 0.8rem;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-open:hover { background: #5a6fd6; }
+    .empty-state {
+      text-align: center;
+      padding: 60px;
+      color: #555;
+    }
+    .empty-state svg { margin-bottom: 20px; opacity: 0.3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Android Remote Control</h1>
+    <p class="subtitle">Générez un lien, envoyez-le sur votre Android, et prenez le contrôle</p>
+    
+    <button class="btn-create" onclick="createSession()">+ Nouvelle Session</button>
+    
+    <div id="sessions" class="sessions-list">
+      <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+        <p>Aucune session active.<br>Cliquez sur "Nouvelle Session" pour commencer.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let sessions = [];
+
+    async function createSession() {
+      const res = await fetch('/api/create-session', { method: 'POST' });
+      const data = await res.json();
+      loadSessions();
+    }
+
+    async function loadSessions() {
+      const res = await fetch('/api/sessions');
+      sessions = await res.json();
+      renderSessions();
+    }
+
+    function renderSessions() {
+      const container = document.getElementById('sessions');
+      if (sessions.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>Aucune session active.</p></div>`;
+        return;
+      }
+      container.innerHTML = sessions.map(s => `
+        <div class="session-card">
+          <div class="session-header">
+            <span class="session-id">Session: ${s.id.substring(0, 8)}...</span>
+            <span class="status ${s.status}">${s.status === 'waiting' ? '⏳ En attente' : s.status === 'connected' ? '✅ Connecté' : '📡 Streaming'}</span>
+          </div>
+          <div class="links-section">
+            <div class="link-row">
+              <span class="link-label">📱 Lien Mobile :</span>
+              <input class="link-input" readonly value="${location.origin}/mobile/${s.id}" id="mobile-${s.id}">
+              <button class="btn-copy" onclick="copyLink('mobile-${s.id}', this)">Copier</button>
+            </div>
+            <div class="link-row">
+              <span class="link-label">🖥️ Lien Viewer :</span>
+              <input class="link-input" readonly value="${location.origin}/viewer/${s.id}" id="viewer-${s.id}">
+              <button class="btn-copy" onclick="copyLink('viewer-${s.id}', this)">Copier</button>
+              <a class="btn-open" href="/viewer/${s.id}" target="_blank">Ouvrir</a>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function copyLink(inputId, btn) {
+      const input = document.getElementById(inputId);
+      navigator.clipboard.writeText(input.value);
+      btn.textContent = '✓ Copié';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copier';
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+
+    // Listen for session updates
+    socket.on('session-update', (session) => {
+      const idx = sessions.findIndex(s => s.id === session.id);
+      if (idx >= 0) sessions[idx] = session;
+      renderSessions();
+    });
+
+    loadSessions();
+  </script>
+</body>
+</html>

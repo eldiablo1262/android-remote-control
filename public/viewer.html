@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Remote - Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+    .sidebar {
+      width: 280px;
+      background: #1a1a2e;
+      border-right: 1px solid #2a2a4a;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .sidebar h2 {
+      font-size: 1.1rem;
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+    .status-panel {
+      background: #0f0f23;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 0.85rem;
+    }
+    .status-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-ok { background: #002d00; color: #00ff00; }
+    .badge-wait { background: #2d2d00; color: #ffd700; }
+    .badge-off { background: #2d0000; color: #ff4444; }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn-ctrl {
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #2a2a4a;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .btn-ctrl:hover { background: #3a3a5a; }
+    .btn-ctrl.active { background: #667eea; }
+    .phone-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .phone-frame {
+      position: relative;
+      background: #1a1a1a;
+      border-radius: 40px;
+      border: 4px solid #333;
+      padding: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      max-height: 90vh;
+      aspect-ratio: 9/19.5;
+    }
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 28px;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+      cursor: pointer;
+    }
+    #remoteVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 28px;
+    }
+    .touch-cursor {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border: 2px solid rgba(102, 126, 234, 0.8);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.3s;
+      opacity: 0;
+      box-shadow: 0 0 15px rgba(102, 126, 234, 0.4);
+    }
+    .touch-cursor.active {
+      opacity: 1;
+      animation: touchPulse 0.3s ease-out;
+    }
+    @keyframes touchPulse {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    .waiting-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 15, 35, 0.95);
+      border-radius: 28px;
+      z-index: 10;
+    }
+    .waiting-overlay .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid #333;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .waiting-overlay p {
+      color: #888;
+      font-size: 0.9rem;
+    }
+    .info-bar {
+      position: fixed;
+      bottom: 0;
+      left: 280px;
+      right: 0;
+      padding: 8px 20px;
+      background: #1a1a2e;
+      border-top: 1px solid #2a2a4a;
+      font-size: 0.8rem;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+    .swipe-indicator {
+      position: absolute;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .swipe-line {
+      stroke: rgba(102, 126, 234, 0.6);
+      stroke-width: 3;
+      stroke-linecap: round;
+      fill: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>🖥️ Contrôle à distance</h2>
+    
+    <div class="status-panel">
+      <div class="status-item">
+        <span>Mobile</span>
+        <span class="status-badge badge-wait" id="mobileStatus">En attente</span>
+      </div>
+      <div class="status-item">
+        <span>Stream</span>
+        <span class="status-badge badge-off" id="streamStatus">Inactif</span>
+      </div>
+      <div class="status-item">
+        <span>Contrôle</span>
+        <span class="status-badge badge-off" id="controlStatus">Inactif</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-ctrl" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Plein écran</button>
+      <button class="btn-ctrl" id="btnBack" onclick="sendKey('back')">← Retour</button>
+      <button class="btn-ctrl" id="btnHome" onclick="sendKey('home')">○ Accueil</button>
+      <button class="btn-ctrl" id="btnRecent" onclick="sendKey('recent')">□ Apps récentes</button>
+    </div>
+
+    <div class="status-panel" style="margin-top: auto;">
+      <p style="font-size: 0.8rem; color: #666; line-height: 1.4;">
+        <strong>Interactions :</strong><br>
+        • Clic = Tap<br>
+        • Glisser = Swipe<br>
+        • Molette = Scroll<br>
+        • Boutons = Navigation
+      </p>
+    </div>
+  </div>
+
+  <div class="phone-container">
+    <div class="phone-frame">
+      <div class="phone-screen" id="phoneScreen">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div class="touch-cursor" id="touchCursor"></div>
+        <div class="waiting-overlay" id="waitingOverlay">
+          <div class="spinner"></div>
+          <p>En attente du partage d'écran...</p>
+          <p style="margin-top: 8px; font-size: 0.8rem; color: #555;">
+            Ouvrez le lien mobile sur votre Android
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-bar">
+    <span id="resolutionInfo">Résolution: --</span>
+    <span id="fpsInfo">FPS: --</span>
+    <span id="latencyInfo">Latence: --</span>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const sessionId = window.location.pathname.split('/').pop();
+    const socket = io();
+    let peerConnection = null;
+    let dataChannel = null;
+    let isStreaming = false;
+
+    const phoneScreen = document.getElementById('phoneScreen');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const waitingOverlay = document.getElementById('waitingOverlay');
+    const touchCursor = document.getElementById('touchCursor');
+    const mobileStatus = document.getElementById('mobileStatus');
+    const streamStatus = document.getElementById('streamStatus');
+    const controlStatus = document.getElementById('controlStatus');
+
+    // Join session as viewer
+    socket.emit('join-session', { sessionId, role: 'viewer' });
+
+    socket.on('session-update', (session) => {
+      if (session.androidConnected) {
+        mobileStatus.textContent = 'Connecté';
+        mobileStatus.className = 'status-badge badge-ok';
+      } else {
+        mobileStatus.textContent = 'Déconnecté';
+        mobileStatus.className = 'status-badge badge-off';
+      }
+    });
+
+    // Handle offer from mobile
+    socket.on('offer', async ({ offer }) => {
+      const config = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      };
+
+      peerConnection = new RTCPeerConnection(config);
+
+      // Handle incoming stream
+      peerConnection.ontrack = (event) => {
+        remoteVideo.srcObject = event.streams[0];
+        waitingOverlay.style.display = 'none';
+        isStreaming = true;
+        streamStatus.textContent = 'Actif';
+        streamStatus.className = 'status-badge badge-ok';
+        
+        // Update resolution info
+        remoteVideo.onloadedmetadata = () => {
+          document.getElementById('resolutionInfo').textContent = 
+            `Résolution: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`;
+        };
+      };
+
+      // Handle data channel
+      peerConnection.ondatachannel = (event) => {
+        dataChannel = event.channel;
+        dataChannel.onopen = () => {
+          controlStatus.textContent = 'Actif';
+          controlStatus.className = 'status-badge badge-ok';
+        };
+        dataChannel.onclose = () => {
+          controlStatus.textContent = 'Inactif';
+          controlStatus.className = 'status-badge badge-off';
+        };
+      };
+
+      // ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        if (peerConnection.connectionState === 'disconnected' || 
+            peerConnection.connectionState === 'failed') {
+          waitingOverlay.style.display = 'flex';
+          isStreaming = false;
+          streamStatus.textContent = 'Déconnecté';
+          streamStatus.className = 'status-badge badge-off';
+        }
+      };
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('answer', { sessionId, answer });
+    });
+
+    // Handle ICE candidates
+    socket.on('ice-candidate', async ({ candidate }) => {
+      if (peerConnection && candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    // ===== Touch/Mouse Controls =====
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+    let dragEnd = { x: 0, y: 0 };
+
+    function getRelativePosition(e) {
+      const rect = phoneScreen.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) / rect.width,
+        y: (e.clientY - rect.top) / rect.height
+      };
+    }
+
+    phoneScreen.addEventListener('mousedown', (e) => {
+      if (!isStreaming) return;
+      isDragging = true;
+      dragStart = getRelativePosition(e);
+      showCursor(e);
+    });
+
+    phoneScreen.addEventListener('mousemove', (e) => {
+      if (!isStreaming || !isDragging) return;
+      dragEnd = getRelativePosition(e);
+      moveCursor(e);
+    });
+
+    phoneScreen.addEventListener('mouseup', (e) => {
+      if (!isStreaming) return;
+      dragEnd = getRelativePosition(e);
+      
+      const dx = dragEnd.x - dragStart.x;
+      const dy = dragEnd.y - dragStart.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 0.02) {
+        // It's a tap
+        sendTouchEvent('tap', dragStart.x, dragStart.y);
+      } else {
+        // It's a swipe
+        sendTouchEvent('swipe', dragStart.x, dragStart.y, dragEnd.x, dragEnd.y);
+      }
+
+      isDragging = false;
+      hideCursor();
+    });
+
+    phoneScreen.addEventListener('wheel', (e) => {
+      if (!isStreaming) return;
+      e.preventDefault();
+      const pos = getRelativePosition(e);
+      const direction = e.deltaY > 0 ? 'down' : 'up';
+      sendTouchEvent('scroll', pos.x, pos.y, 0, 0, direction);
+    });
+
+    function sendTouchEvent(type, x, y, endX, endY, extra) {
+      const event = { type, x, y, endX, endY, extra, timestamp: Date.now() };
+      
+      // Send via data channel if available
+      if (dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(JSON.stringify(event));
+      }
+      
+      // Also send via socket as fallback
+      socket.emit('touch-event', { sessionId, event });
+    }
+
+    function sendKey(key) {
+      sendTouchEvent('key', 0, 0, 0, 0, key);
+    }
+
+    function showCursor(e) {
+      const rect = phoneScreen.getBoundingClientRect();
+      touchCursor.style.left = (e.clientX - rect.left) + 'px';
+      touchCursor.style.top = (e.clientY - rect.top) + 'px';
+      touchCursor.classList.add('active');
+    }
+
+    function moveCursor(e) {
+      const rect = phoneScreen.getBoundingClientRect();
+      touchCursor.style.left = (e.clientX - rect.left) + 'px';
+      touchCursor.style.top = (e.clientY - rect.top) + 'px';
+    }
+
+    function hideCursor() {
+      setTimeout(() => touchCursor.classList.remove('active'), 300);
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    // FPS counter
+    let frameCount = 0;
+    let lastFpsUpdate = Date.now();
+    
+    function updateFps() {
+      if (isStreaming && remoteVideo.srcObject) {
+        const now = Date.now();
+        frameCount++;
+        if (now - lastFpsUpdate >= 1000) {
+          document.getElementById('fpsInfo').textContent = `FPS: ${frameCount}`;
+          frameCount = 0;
+          lastFpsUpdate = now;
+        }
+      }
+      requestAnimationFrame(updateFps);
+    }
+    updateFps();
+  </script>
+</body>
+</html>

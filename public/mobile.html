@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Android Remote - Partage d'écran</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 16px;
+      padding: 30px;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .status-text {
+      margin: 20px 0;
+      font-size: 1rem;
+      color: #aaa;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    .status-dot.waiting { background: #ffd700; }
+    .status-dot.connected { background: #00ff00; }
+    .status-dot.streaming { background: #00bfff; }
+    .status-dot.error { background: #ff4444; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .btn-share {
+      padding: 16px 40px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    .btn-share:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    .btn-share:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #666;
+      line-height: 1.5;
+    }
+    .touch-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      display: none;
+    }
+    .touch-indicator {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: 3px solid #667eea;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: touchFade 0.5s forwards;
+      z-index: 10000;
+    }
+    @keyframes touchFade {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="mainCard">
+    <h1>📱 Partage d'écran</h1>
+    <p class="status-text">
+      <span class="status-dot waiting" id="statusDot"></span>
+      <span id="statusText">En attente de connexion...</span>
+    </p>
+    <button class="btn-share" id="btnShare" onclick="startScreenShare()">
+      Partager mon écran
+    </button>
+    <p class="info">
+      Appuyez sur le bouton pour partager votre écran avec le PC.<br>
+      Vous devrez autoriser la capture d'écran.
+    </p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const sessionId = window.location.pathname.split('/').pop();
+    const socket = io();
+    let peerConnection = null;
+    let dataChannel = null;
+    let screenStream = null;
+
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const btnShare = document.getElementById('btnShare');
+
+    // Join session as mobile
+    socket.emit('join-session', { sessionId, role: 'mobile' });
+
+    function updateStatus(status, text) {
+      statusDot.className = `status-dot ${status}`;
+      statusText.textContent = text;
+    }
+
+    socket.on('session-update', (session) => {
+      if (session.viewerConnected) {
+        updateStatus('connected', 'Viewer connecté - Prêt à partager');
+        btnShare.disabled = false;
+      }
+    });
+
+    socket.on('viewer-ready', () => {
+      updateStatus('connected', 'Viewer prêt - Cliquez pour partager');
+      btnShare.disabled = false;
+    });
+
+    async function startScreenShare() {
+      try {
+        updateStatus('streaming', 'Demande de permission...');
+        
+        // Request screen capture
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1080 },
+            height: { ideal: 1920 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+
+        updateStatus('streaming', 'Écran partagé - Connexion...');
+        btnShare.disabled = true;
+        btnShare.textContent = '📡 Partage en cours...';
+
+        // Create WebRTC peer connection
+        const config = {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        };
+
+        peerConnection = new RTCPeerConnection(config);
+
+        // Add screen stream tracks
+        screenStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, screenStream);
+        });
+
+        // Create data channel for receiving touch events
+        dataChannel = peerConnection.createDataChannel('control', { ordered: true });
+        dataChannel.onopen = () => {
+          console.log('Data channel open - ready for control');
+          updateStatus('streaming', '✅ Connecté - Contrôle actif');
+        };
+        dataChannel.onmessage = (event) => {
+          handleRemoteEvent(JSON.parse(event.data));
+        };
+
+        // ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', { sessionId, candidate: event.candidate });
+          }
+        };
+
+        // Create and send offer
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('offer', { sessionId, offer });
+
+        // Handle stream end
+        screenStream.getVideoTracks()[0].onended = () => {
+          updateStatus('waiting', 'Partage arrêté');
+          btnShare.disabled = false;
+          btnShare.textContent = 'Partager mon écran';
+          if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+          }
+        };
+
+      } catch (err) {
+        console.error('Screen share error:', err);
+        updateStatus('error', `Erreur: ${err.message}`);
+        btnShare.disabled = false;
+      }
+    }
+
+    // Handle answer from viewer
+    socket.on('answer', async ({ answer }) => {
+      if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    // Handle ICE candidates from viewer
+    socket.on('ice-candidate', async ({ candidate }) => {
+      if (peerConnection && candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    // Handle remote touch/control events
+    function handleRemoteEvent(event) {
+      // Show visual indicator of where the touch happened
+      showTouchIndicator(event.x * window.innerWidth, event.y * window.innerHeight);
+      
+      // For actual device control, this would need accessibility service
+      // Here we simulate the touch visually
+      console.log('Remote event:', event);
+    }
+
+    function showTouchIndicator(x, y) {
+      const indicator = document.createElement('div');
+      indicator.className = 'touch-indicator';
+      indicator.style.left = x + 'px';
+      indicator.style.top = y + 'px';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 500);
+    }
+
+    // Handle touch events on this device and relay them
+    socket.on('touch-event', ({ event }) => {
+      handleRemoteEvent(event);
+    });
+  </script>
+</body>
+</html>
