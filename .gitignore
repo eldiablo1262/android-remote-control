@@ -1,3 +1,7 @@
 node_modules/
 .env
 .certs/
+android-app/app/build/
+android-app/.gradle/
+android-app/app/release-key.jks
+android-app/local.properties

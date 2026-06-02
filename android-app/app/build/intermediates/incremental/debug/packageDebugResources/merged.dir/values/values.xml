@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="ic_launcher_background">#667eea</color>
-    <color name="ic_launcher_foreground">#FFFFFF</color>
-    <string name="accessibility_description">Permet le controle a distance du telephone via le serveur Remote Control. Necessaire pour simuler les touches et gestes.</string>
-    <string name="app_name">Remote Control</string>
-</resources>
