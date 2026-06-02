@@ -212,6 +212,11 @@ io.on('connection', (socket) => {
     sendToAndroid(sessionId, { type: 'set-quality', quality });
   });
 
+  // Request keyframe (H.264)
+  socket.on('request-keyframe', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'request-keyframe' });
+  });
+
   socket.on('disconnect', () => {
     const { sessionId, role } = socket;
     if (sessionId && sessions.has(sessionId)) {
@@ -284,14 +289,26 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (data, isBinary) => {
     if (isBinary) {
-      // Binary data = H.264 NAL units or JPEG frames
-      // Relay to viewers as binary (base64 for Socket.IO)
-      const base64Frame = data.toString('base64');
-      io.to(sessionId).emit('screen-frame', {
-        frame: base64Frame,
-        timestamp: Date.now(),
-        size: data.length
-      });
+      // Binary data = H.264 encoded video stream
+      // Packet format: [flags(1)] + [timestamp(8)] + [h264 NAL data]
+      if (data.length > 9) {
+        const flags = data[0];
+        const isKeyframe = (flags & 0x01) !== 0;
+        // Relay binary H.264 data directly to viewers
+        io.to(sessionId).emit('h264-data', {
+          data: data.toString('base64'),
+          keyframe: isKeyframe,
+          size: data.length
+        });
+      } else {
+        // Small binary = likely JPEG frame (legacy)
+        const base64Frame = data.toString('base64');
+        io.to(sessionId).emit('screen-frame', {
+          frame: base64Frame,
+          timestamp: Date.now(),
+          size: data.length
+        });
+      }
     } else {
       // Text data = JSON messages from Android
       try {
@@ -376,6 +393,29 @@ function handleAndroidMessage(sessionId, msg) {
 
     case 'bandwidth-report':
       io.to(sessionId).emit('bandwidth-report', msg.data);
+      break;
+
+    case 'stream-config':
+      // H.264 stream configuration (codec, resolution, fps, bitrate)
+      io.to(sessionId).emit('stream-config', msg);
+      console.log(`[Android] ${sessionId} stream: ${msg.codec} ${msg.width}x${msg.height} @ ${msg.fps}fps`);
+      break;
+
+    case 'codec-data':
+      // H.264 SPS/PPS initialization data
+      io.to(sessionId).emit('codec-data', msg);
+      console.log(`[Android] ${sessionId} codec data received (SPS+PPS)`);
+      break;
+
+    case 'frame':
+      // Legacy JPEG frame (JSON with base64)
+      io.to(sessionId).emit('screen-frame', {
+        frame: msg.frame,
+        timestamp: msg.timestamp,
+        width: msg.width,
+        height: msg.height,
+        size: msg.frame ? msg.frame.length : 0
+      });
       break;
 
     default:

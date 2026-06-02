@@ -11,9 +11,13 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
 import android.media.ImageReader;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -21,6 +25,7 @@ import android.os.PowerManager;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Surface;
 import android.view.WindowManager;
 
 import org.json.JSONObject;
@@ -53,11 +58,19 @@ public class ScreenCaptureService extends Service {
     private HandlerThread handlerThread;
     private Handler handler;
 
+    // H.264 encoder
+    private MediaCodec mediaCodec;
+    private Surface encoderSurface;
+    private boolean useH264 = true;
+    private boolean codecRunning = false;
+    private Thread encoderThread;
+
     private int screenWidth = 720;
     private int screenHeight = 1280;
     private int screenDensity;
     private int jpegQuality = 40;
     private int fps = 15;
+    private int bitrate = 2000000; // 2 Mbps default
     private AtomicBoolean sending = new AtomicBoolean(false);
 
     @Override
@@ -218,6 +231,165 @@ public class ScreenCaptureService extends Service {
     }
 
     private void startScreenCapture() {
+        if (useH264) {
+            startH264Capture();
+        } else {
+            startJpegCapture();
+        }
+    }
+
+    // ======================== H.264 ENCODING (MediaCodec) ========================
+
+    private void startH264Capture() {
+        try {
+            // Ensure dimensions are even (required by H.264)
+            screenWidth = screenWidth % 2 == 0 ? screenWidth : screenWidth - 1;
+            screenHeight = screenHeight % 2 == 0 ? screenHeight : screenHeight - 1;
+
+            // Configure MediaCodec encoder
+            MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, screenWidth, screenHeight);
+            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+            format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
+            format.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
+            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2); // Keyframe every 2 seconds
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+
+            // Low latency profile
+            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline);
+            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
+            }
+
+            mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+            mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            encoderSurface = mediaCodec.createInputSurface();
+            mediaCodec.start();
+            codecRunning = true;
+
+            // Create VirtualDisplay writing to encoder surface
+            virtualDisplay = mediaProjection.createVirtualDisplay(
+                "RemoteControl-H264",
+                screenWidth, screenHeight, screenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                encoderSurface,
+                null, handler
+            );
+
+            // Start encoder output thread
+            encoderThread = new Thread(this::drainEncoder, "H264-Encoder");
+            encoderThread.start();
+
+            // Notify viewer about H.264 mode
+            try {
+                JSONObject msg = new JSONObject();
+                msg.put("type", "stream-config");
+                msg.put("codec", "h264");
+                msg.put("width", screenWidth);
+                msg.put("height", screenHeight);
+                msg.put("fps", fps);
+                msg.put("bitrate", bitrate);
+                webSocket.send(msg.toString());
+            } catch (Exception e) {
+                Log.e(TAG, "Error sending stream config", e);
+            }
+
+            Log.d(TAG, "H.264 capture started: " + screenWidth + "x" + screenHeight + " @ " + fps + "fps, " + (bitrate / 1000) + "kbps");
+
+        } catch (Exception e) {
+            Log.e(TAG, "H.264 init failed, falling back to JPEG", e);
+            useH264 = false;
+            startJpegCapture();
+        }
+    }
+
+    private void drainEncoder() {
+        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+
+        while (codecRunning && isRunning) {
+            try {
+                int outputIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 10000); // 10ms timeout
+
+                if (outputIndex >= 0) {
+                    ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputIndex);
+                    if (outputBuffer != null && bufferInfo.size > 0 && webSocket != null) {
+                        outputBuffer.position(bufferInfo.offset);
+                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
+
+                        // Create packet: [flags(1 byte)] + [timestamp(8 bytes)] + [h264 data]
+                        byte[] h264Data = new byte[bufferInfo.size];
+                        outputBuffer.get(h264Data);
+
+                        byte[] packet = new byte[9 + h264Data.length];
+                        // Flag: bit 0 = keyframe
+                        packet[0] = (byte) ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0 ? 1 : 0);
+                        // Timestamp (big-endian long)
+                        long ts = bufferInfo.presentationTimeUs;
+                        for (int i = 0; i < 8; i++) {
+                            packet[1 + i] = (byte) (ts >> (56 - i * 8));
+                        }
+                        // H.264 NAL data
+                        System.arraycopy(h264Data, 0, packet, 9, h264Data.length);
+
+                        // Send as binary WebSocket message
+                        okio.ByteString binaryData = okio.ByteString.of(packet);
+                        webSocket.send(binaryData);
+                    }
+
+                    mediaCodec.releaseOutputBuffer(outputIndex, false);
+
+                } else if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    // Send SPS/PPS in the new format
+                    MediaFormat newFormat = mediaCodec.getOutputFormat();
+                    Log.d(TAG, "H.264 format changed: " + newFormat.toString());
+
+                    ByteBuffer sps = newFormat.getByteBuffer("csd-0");
+                    ByteBuffer pps = newFormat.getByteBuffer("csd-1");
+                    if (sps != null && pps != null) {
+                        byte[] spsBytes = new byte[sps.remaining()];
+                        sps.get(spsBytes);
+                        byte[] ppsBytes = new byte[pps.remaining()];
+                        pps.get(ppsBytes);
+
+                        try {
+                            JSONObject codecData = new JSONObject();
+                            codecData.put("type", "codec-data");
+                            codecData.put("sps", Base64.encodeToString(spsBytes, Base64.NO_WRAP));
+                            codecData.put("pps", Base64.encodeToString(ppsBytes, Base64.NO_WRAP));
+                            webSocket.send(codecData.toString());
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error sending codec data", e);
+                        }
+                    }
+                }
+            } catch (IllegalStateException e) {
+                // Codec released, exit
+                break;
+            } catch (Exception e) {
+                Log.e(TAG, "Encoder drain error", e);
+                break;
+            }
+        }
+        Log.d(TAG, "Encoder thread stopped");
+    }
+
+    private void requestKeyFrame() {
+        if (mediaCodec != null && codecRunning) {
+            try {
+                Bundle params = new Bundle();
+                params.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
+                mediaCodec.setParameters(params);
+                Log.d(TAG, "Keyframe requested");
+            } catch (Exception e) {
+                Log.e(TAG, "Error requesting keyframe", e);
+            }
+        }
+    }
+
+    // ======================== JPEG FALLBACK ========================
+
+    private void startJpegCapture() {
         imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
 
         virtualDisplay = mediaProjection.createVirtualDisplay(
@@ -238,7 +410,7 @@ public class ScreenCaptureService extends Service {
             }
         });
 
-        Log.d(TAG, "Screen capture started: " + screenWidth + "x" + screenHeight + " @ " + fps + "fps");
+        Log.d(TAG, "JPEG capture started: " + screenWidth + "x" + screenHeight + " @ " + fps + "fps");
     }
 
     private void captureFrame() {
@@ -325,11 +497,28 @@ public class ScreenCaptureService extends Service {
                     if (quality != null) {
                         jpegQuality = quality.optInt("jpeg", jpegQuality);
                         fps = quality.optInt("fps", fps);
-                        Log.d(TAG, "Quality updated: JPEG=" + jpegQuality + " FPS=" + fps);
+                        if (quality.has("bitrate")) {
+                            bitrate = quality.optInt("bitrate", bitrate);
+                            // Update encoder bitrate dynamically
+                            if (mediaCodec != null && codecRunning) {
+                                try {
+                                    Bundle params = new Bundle();
+                                    params.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitrate);
+                                    mediaCodec.setParameters(params);
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error updating bitrate", e);
+                                }
+                            }
+                        }
+                        Log.d(TAG, "Quality updated: JPEG=" + jpegQuality + " FPS=" + fps + " Bitrate=" + bitrate);
                     }
+                    break;
+                case "request-keyframe":
+                    requestKeyFrame();
                     break;
                 case "viewer-ready":
                     Log.d(TAG, "Viewer is ready");
+                    if (useH264) requestKeyFrame();
                     break;
                 default:
                     Log.d(TAG, "Unknown command: " + type);
@@ -394,9 +583,28 @@ public class ScreenCaptureService extends Service {
 
     private void cleanup() {
         isRunning = false;
+        codecRunning = false;
+
+        if (encoderThread != null) {
+            encoderThread.interrupt();
+            encoderThread = null;
+        }
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
+        }
+        if (mediaCodec != null) {
+            try {
+                mediaCodec.stop();
+                mediaCodec.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing codec", e);
+            }
+            mediaCodec = null;
+        }
+        if (encoderSurface != null) {
+            encoderSurface.release();
+            encoderSurface = null;
         }
         if (imageReader != null) {
             imageReader.close();

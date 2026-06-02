@@ -332,7 +332,11 @@
           <input type="range" class="quality-slider" min="5" max="30" value="20" id="fpsSlider" oninput="updateQuality()">
         </div>
         <div style="font-size:0.8rem;margin-bottom:8px;">
-          <span>Qualité JPEG: </span><span id="qualityValue">70</span>%
+          <span>Bitrate H.264: </span><span id="bitrateValue">2000</span> kbps
+          <input type="range" class="quality-slider" min="500" max="8000" value="2000" step="250" id="bitrateSlider" oninput="updateQuality()">
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:8px;">
+          <span>Qualité JPEG (fallback): </span><span id="qualityValue">70</span>%
           <input type="range" class="quality-slider" min="10" max="100" value="70" id="qualitySlider" oninput="updateQuality()">
         </div>
         <div style="font-size:0.8rem;margin-bottom:8px;">
@@ -343,9 +347,15 @@
             <option value="1080">1080p</option>
           </select>
         </div>
-        <button class="btn primary" onclick="updateQuality()" style="width:100%;">Appliquer</button>
+        <div class="btn-row">
+          <button class="btn primary" onclick="updateQuality()" style="flex:1">Appliquer</button>
+          <button class="btn" onclick="socket.emit('request-keyframe',{sessionId})" title="Forcer une image clé">🔑 Keyframe</button>
+        </div>
         <div style="font-size:0.75rem;color:#555;margin-top:8px;" id="bandwidthInfo">
           Bande passante: --
+        </div>
+        <div style="font-size:0.7rem;color:#667eea;margin-top:4px;" id="codecInfo">
+          Codec: en attente...
         </div>
       </div>
     </div>
@@ -439,12 +449,156 @@
       }
     });
 
+    // ===== H.264 Video Decoder (WebCodecs API) =====
+    let videoDecoder = null;
+    let streamConfig = null;
+    let spsData = null, ppsData = null;
+    let h264Canvas = null, h264Ctx = null;
+    let waitingForKeyframe = true;
+
+    socket.on('stream-config', (config) => {
+      streamConfig = config;
+      console.log('[H.264] Stream config:', config.codec, config.width + 'x' + config.height, config.fps + 'fps');
+      initH264Decoder(config.width, config.height);
+      const ci = document.getElementById('codecInfo');
+      if (ci) ci.textContent = `Codec: ${config.codec.toUpperCase()} | ${config.width}x${config.height} | ${(config.bitrate/1000)}kbps`;
+    });
+
+    socket.on('codec-data', (data) => {
+      spsData = base64ToUint8(data.sps);
+      ppsData = base64ToUint8(data.pps);
+      console.log('[H.264] SPS/PPS received, SPS=' + spsData.length + ' PPS=' + ppsData.length);
+      // Request keyframe to start decoding
+      socket.emit('request-keyframe', { sessionId });
+    });
+
+    socket.on('h264-data', ({ data, keyframe, size }) => {
+      if (!videoDecoder || videoDecoder.state !== 'configured') return;
+
+      const rawPacket = base64ToUint8(data);
+      if (rawPacket.length <= 9) return;
+
+      // Extract h264 NAL data (skip 9-byte header: 1 flag + 8 timestamp)
+      const h264Nal = rawPacket.slice(9);
+
+      if (waitingForKeyframe && !keyframe) return; // Skip until first keyframe
+      if (keyframe) waitingForKeyframe = false;
+
+      try {
+        const chunk = new EncodedVideoChunk({
+          type: keyframe ? 'key' : 'delta',
+          timestamp: Date.now() * 1000,
+          data: h264Nal
+        });
+        videoDecoder.decode(chunk);
+      } catch (e) {
+        console.warn('[H.264] Decode error:', e.message);
+        waitingForKeyframe = true;
+        socket.emit('request-keyframe', { sessionId });
+      }
+
+      // Update stats
+      if (!isStreaming) {
+        isStreaming = true;
+        waitingOverlay.style.display = 'none';
+        document.getElementById('streamStatus').textContent = 'H.264';
+        document.getElementById('streamStatus').className = 'badge badge-ok';
+      }
+      frameCount++;
+      totalBytes += (size || 0);
+      const now = Date.now();
+      if (now - lastFpsTime >= 1000) {
+        document.getElementById('fpsInfo').textContent = `FPS: ${frameCount}`;
+        document.getElementById('sizeInfo').textContent = `Débit: ${(totalBytes / 1024).toFixed(0)} KB/s`;
+        frameCount = 0;
+        totalBytes = 0;
+        lastFpsTime = now;
+      }
+    });
+
+    function initH264Decoder(width, height) {
+      if (videoDecoder) {
+        try { videoDecoder.close(); } catch(e) {}
+      }
+
+      // Create offscreen canvas for rendering decoded frames
+      if (!h264Canvas) {
+        h264Canvas = document.createElement('canvas');
+        h264Canvas.style.cssText = 'width:100%;height:100%;object-fit:contain;display:none;position:absolute;top:0;left:0;';
+        phoneScreen.appendChild(h264Canvas);
+      }
+      h264Canvas.width = width || 720;
+      h264Canvas.height = height || 1280;
+      h264Ctx = h264Canvas.getContext('2d');
+
+      if (typeof VideoDecoder === 'undefined') {
+        console.warn('[H.264] WebCodecs not supported, falling back to JPEG');
+        return;
+      }
+
+      videoDecoder = new VideoDecoder({
+        output: (frame) => {
+          h264Ctx.drawImage(frame, 0, 0);
+          frame.close();
+          // Show H.264 canvas, hide JPEG image
+          h264Canvas.style.display = 'block';
+          remoteImage.style.display = 'none';
+          waitingOverlay.style.display = 'none';
+        },
+        error: (e) => {
+          console.error('[H.264] Decoder error:', e.message);
+          waitingForKeyframe = true;
+          socket.emit('request-keyframe', { sessionId });
+        }
+      });
+
+      // Build codec description from SPS/PPS if available
+      let description = undefined;
+      if (spsData && ppsData) {
+        // Annex-B format: start code + SPS + start code + PPS
+        const startCode = new Uint8Array([0, 0, 0, 1]);
+        description = new Uint8Array(startCode.length + spsData.length + startCode.length + ppsData.length);
+        description.set(startCode, 0);
+        description.set(spsData, startCode.length);
+        description.set(startCode, startCode.length + spsData.length);
+        description.set(ppsData, startCode.length + spsData.length + startCode.length);
+      }
+
+      const codecConfig = {
+        codec: 'avc1.42E01F', // Baseline profile level 3.1
+        codedWidth: width || 720,
+        codedHeight: height || 1280,
+        optimizeForLatency: true
+      };
+      if (description) codecConfig.description = description;
+
+      try {
+        videoDecoder.configure(codecConfig);
+        waitingForKeyframe = true;
+        console.log('[H.264] Decoder configured:', codecConfig.codec, codecConfig.codedWidth + 'x' + codecConfig.codedHeight);
+      } catch (e) {
+        console.error('[H.264] Failed to configure decoder:', e.message);
+        videoDecoder = null;
+      }
+    }
+
+    function base64ToUint8(b64) {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
     // ===== Device Info =====
     socket.on('device-info', (info) => {
       document.getElementById('deviceInfo').textContent =
         `${info.model} | Android ${info.androidVersion} | ${info.screenWidth}x${info.screenHeight}`;
       document.getElementById('resolutionInfo').textContent =
         `Résolution: ${info.screenWidth}x${info.screenHeight}`;
+      // Init H.264 decoder with device resolution
+      if (!videoDecoder && info.screenWidth && info.screenHeight) {
+        initH264Decoder(info.screenWidth, info.screenHeight);
+      }
     });
 
     // ===== Touch Controls =====
@@ -657,10 +811,20 @@
     function updateQuality() {
       const fps = document.getElementById('fpsSlider').value;
       const quality = document.getElementById('qualitySlider').value;
+      const bitrateKbps = document.getElementById('bitrateSlider').value;
       const resolution = document.getElementById('resolutionSelect').value;
       document.getElementById('fpsValue').textContent = fps;
       document.getElementById('qualityValue').textContent = quality;
-      socket.emit('set-quality', { sessionId, quality: { fps: +fps, jpegQuality: +quality, maxHeight: +resolution } });
+      document.getElementById('bitrateValue').textContent = bitrateKbps;
+      socket.emit('set-quality', {
+        sessionId,
+        quality: {
+          fps: +fps,
+          jpeg: +quality,
+          bitrate: +bitrateKbps * 1000,
+          maxHeight: +resolution
+        }
+      });
     }
 
     socket.on('bandwidth-report', (data) => {
