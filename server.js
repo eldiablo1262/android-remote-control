@@ -339,6 +339,8 @@ wss.on('connection', (ws) => {
     streaming: { fps: 20, quality: 70, codec: 'h264' }
   }));
 
+  let frameCounter = 0;
+
   ws.on('message', (data, isBinary) => {
     if (isBinary) {
       const marker = data[0];
@@ -354,6 +356,10 @@ wss.on('connection', (ws) => {
         // H.264 video: [flags(1)] + [timestamp(8)] + [h264 NAL data]
         const flags = data[0];
         const isKeyframe = (flags & 0x01) !== 0;
+        frameCounter++;
+        if (frameCounter % 30 === 1) {
+          console.log(`[Android] ${sessionId} H.264 frame #${frameCounter} (${data.length} bytes, keyframe=${isKeyframe})`);
+        }
         io.to(sessionId).emit('h264-data', {
           data: data.toString('base64'),
           keyframe: isKeyframe,
@@ -372,6 +378,12 @@ wss.on('connection', (ws) => {
       // Text data = JSON messages from Android
       try {
         const msg = JSON.parse(data.toString());
+        if (msg.type === 'frame') {
+          frameCounter++;
+          if (frameCounter % 30 === 1) {
+            console.log(`[Android] ${sessionId} JPEG frame #${frameCounter} (${(msg.frame || '').length} b64 chars)`);
+          }
+        }
         handleAndroidMessage(sessionId, msg);
       } catch (e) {
         // ignore

