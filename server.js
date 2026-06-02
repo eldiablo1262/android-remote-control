@@ -58,6 +58,23 @@ app.get('/api/sessions', (req, res) => {
   res.json(sessionList);
 });
 
+// Install page - auto-downloads APK
+app.get('/install', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'install.html'));
+});
+
+// Direct APK download (serves the local built APK)
+app.get('/remote-control.apk', (req, res) => {
+  const apkPath = path.join(__dirname, 'public', 'remote-control.apk');
+  if (require('fs').existsSync(apkPath)) {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', 'attachment; filename="update.apk"');
+    res.sendFile(apkPath);
+  } else {
+    res.status(404).send('APK not found');
+  }
+});
+
 // Mobile setup page (shows WebSocket URL for Android app)
 app.get('/mobile/:sessionId', (req, res) => {
   const { sessionId } = req.params;

