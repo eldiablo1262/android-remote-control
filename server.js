@@ -67,9 +67,38 @@ app.get('/mobile/:sessionId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
 });
 
-// APK download - redirect to GitHub release (clean download for Android)
-app.get('/download/apk', (req, res) => {
-  res.redirect('https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk');
+// APK download - proxy from GitHub to avoid Play Protect flagging external redirects
+app.get('/download/apk', async (req, res) => {
+  try {
+    const https = require('https');
+    const apkUrl = 'https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk';
+    
+    // Follow redirects and stream the APK binary directly
+    const fetchApk = (url) => {
+      return new Promise((resolve, reject) => {
+        https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (response) => {
+          if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            fetchApk(response.headers.location).then(resolve).catch(reject);
+          } else if (response.statusCode === 200) {
+            resolve(response);
+          } else {
+            reject(new Error('Failed: ' + response.statusCode));
+          }
+        }).on('error', reject);
+      });
+    };
+
+    const apkStream = await fetchApk(apkUrl);
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', 'attachment; filename="RemoteControl.apk"');
+    if (apkStream.headers['content-length']) {
+      res.setHeader('Content-Length', apkStream.headers['content-length']);
+    }
+    apkStream.pipe(res);
+  } catch (err) {
+    console.error('APK proxy error:', err.message);
+    res.redirect('https://github.com/eldiablo1262/android-remote-control/releases/download/latest/remote-control.apk');
+  }
 });
 
 // Viewer page (control interface on PC)
