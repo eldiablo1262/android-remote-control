@@ -54,6 +54,9 @@ public class MainActivity extends AppCompatActivity {
         // Check for deep link (auto-connect from browser)
         handleDeepLink(getIntent());
 
+        // Check if launched from boot receiver
+        handleBootStart(getIntent());
+
         // Restore saved values
         serverUrlInput.setText(prefs.getString("server_url", "wss://remote-control-1dev.onrender.com"));
         sessionIdInput.setText(prefs.getString("session_id", ""));
@@ -196,6 +199,33 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Connexion automatique...", Toast.LENGTH_SHORT).show();
             // Slight delay to let UI initialize
             new android.os.Handler().postDelayed(this::startCapture, 500);
+        }
+    }
+
+    private void handleBootStart(Intent intent) {
+        if (intent == null) return;
+        if (!intent.getBooleanExtra("auto_start_from_boot", false)) return;
+
+        String serverUrl = intent.getStringExtra("server_url");
+        String sessionId = intent.getStringExtra("session_id");
+
+        if (serverUrl != null && !serverUrl.isEmpty()) {
+            serverUrlInput.setText(serverUrl);
+        }
+        if (sessionId != null && !sessionId.isEmpty()) {
+            sessionIdInput.setText(sessionId);
+        }
+
+        // Auto-start capture after a short delay (let UI fully init)
+        new android.os.Handler().postDelayed(this::startCapture, 1000);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // If service is running, minimize to background silently
+        if (ScreenCaptureService.isRunning) {
+            moveTaskToBack(true);
         }
     }
 }

