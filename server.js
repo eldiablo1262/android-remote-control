@@ -61,9 +61,7 @@ app.get('/api/sessions', (req, res) => {
 // Mobile setup page (shows WebSocket URL for Android app)
 app.get('/mobile/:sessionId', (req, res) => {
   const { sessionId } = req.params;
-  if (!sessions.has(sessionId)) {
-    return res.status(404).send('Session not found or expired');
-  }
+  ensureSession(sessionId);
   res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
 });
 
@@ -114,9 +112,7 @@ app.get('/download/apk', async (req, res) => {
 // Viewer page (control interface on PC)
 app.get('/viewer/:sessionId', (req, res) => {
   const { sessionId } = req.params;
-  if (!sessions.has(sessionId)) {
-    return res.status(404).send('Session not found or expired');
-  }
+  ensureSession(sessionId);
   res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
 });
 
@@ -129,8 +125,8 @@ io.on('connection', (socket) => {
     socket.sessionId = sessionId;
     socket.role = role;
 
+    ensureSession(sessionId);
     const session = sessions.get(sessionId);
-    if (!session) return;
 
     if (role === 'viewer') {
       session.viewerConnected = true;
@@ -279,6 +275,21 @@ io.on('connection', (socket) => {
   });
 });
 
+// Helper: auto-create session if it doesn't exist
+function ensureSession(sessionId) {
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, {
+      id: sessionId,
+      created: Date.now(),
+      status: 'waiting',
+      androidConnected: false,
+      viewerConnected: false,
+      deviceInfo: null
+    });
+    console.log(`[Session] Auto-created: ${sessionId}`);
+  }
+}
+
 // Helper: send JSON to Android WebSocket
 function sendToAndroid(sessionId, msg) {
   const androidWs = androidSockets.get(sessionId);
@@ -297,11 +308,7 @@ server.on('upgrade', (request, socket, head) => {
   const match = url.pathname.match(/^\/ws\/android\/(.+)$/);
   if (match) {
     const sessionId = match[1];
-    if (!sessions.has(sessionId)) {
-      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-      socket.destroy();
-      return;
-    }
+    ensureSession(sessionId);
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.sessionId = sessionId;
       wss.emit('connection', ws, request);
