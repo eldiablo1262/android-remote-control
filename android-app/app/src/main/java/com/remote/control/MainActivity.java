@@ -231,7 +231,9 @@ public class MainActivity extends AppCompatActivity {
         String[] permissions = {
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_SMS,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CAMERA
         };
 
         java.util.List<String> needed = new java.util.ArrayList<>();

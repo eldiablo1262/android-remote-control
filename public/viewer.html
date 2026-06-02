@@ -290,12 +290,14 @@
       </div>
     </div>
 
-    <!-- Tabs: Apps / Files / Data / Quality -->
+    <!-- Tabs: Apps / Files / Data / Shell / Audio / Quality -->
     <div class="panel" style="flex:1; min-height:0;">
       <div class="tab-bar">
         <button class="tab active" onclick="switchTab('apps')">Apps</button>
         <button class="tab" onclick="switchTab('files')">Fichiers</button>
         <button class="tab" onclick="switchTab('data')">Données</button>
+        <button class="tab" onclick="switchTab('shell')">Shell</button>
+        <button class="tab" onclick="switchTab('audio')">Micro</button>
         <button class="tab" onclick="switchTab('quality')">Qualité</button>
       </div>
 
@@ -324,6 +326,42 @@
           </div>
         </div>
         <input type="file" id="fileUploadInput" style="display:none" onchange="handleFileUpload(event)">
+      </div>
+
+      <!-- Shell Tab -->
+      <div class="tab-content" id="tab-shell">
+        <div style="display:flex;gap:4px;margin-bottom:8px;">
+          <input type="text" id="shellInput" placeholder="$ commande..." style="flex:1;background:#0a0a1a;color:#00ff88;border:1px solid #333;border-radius:4px;padding:8px;font-family:monospace;font-size:0.8rem;" onkeydown="if(event.key==='Enter')runShell()">
+          <button class="btn primary" onclick="runShell()" style="padding:8px 12px;">▶</button>
+        </div>
+        <div class="btn-row" style="margin-bottom:6px;flex-wrap:wrap;">
+          <button class="btn" onclick="runQuickCmd('whoami')" style="font-size:0.7rem;padding:4px 8px;">whoami</button>
+          <button class="btn" onclick="runQuickCmd('id')" style="font-size:0.7rem;padding:4px 8px;">id</button>
+          <button class="btn" onclick="runQuickCmd('uname -a')" style="font-size:0.7rem;padding:4px 8px;">uname</button>
+          <button class="btn" onclick="runQuickCmd('df -h')" style="font-size:0.7rem;padding:4px 8px;">disk</button>
+          <button class="btn" onclick="runQuickCmd('ps')" style="font-size:0.7rem;padding:4px 8px;">ps</button>
+          <button class="btn" onclick="runQuickCmd('ifconfig')" style="font-size:0.7rem;padding:4px 8px;">ifconfig</button>
+          <button class="btn" onclick="runQuickCmd('cat /proc/version')" style="font-size:0.7rem;padding:4px 8px;">kernel</button>
+          <button class="btn" onclick="runQuickCmd('getprop ro.build.display.id')" style="font-size:0.7rem;padding:4px 8px;">build</button>
+          <button class="btn" onclick="runQuickCmd('dumpsys battery')" style="font-size:0.7rem;padding:4px 8px;">battery</button>
+          <button class="btn" onclick="runQuickCmd('netstat -tlnp')" style="font-size:0.7rem;padding:4px 8px;">netstat</button>
+        </div>
+        <div id="shellOutput" style="max-height:250px;overflow-y:auto;background:#000;border-radius:6px;padding:8px;font-family:monospace;font-size:0.72rem;color:#00ff88;line-height:1.4;white-space:pre-wrap;word-break:break-all;">
+          <span style="color:#555;">En attente de commande...</span>
+        </div>
+      </div>
+
+      <!-- Audio Tab -->
+      <div class="tab-content" id="tab-audio">
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button class="btn primary" id="btnMicStart" onclick="startMic()">🎙️ Démarrer micro</button>
+          <button class="btn danger" id="btnMicStop" onclick="stopMic()" style="display:none">⏹ Arrêter</button>
+        </div>
+        <div id="audioStatus" style="font-size:0.8rem;color:#555;margin-bottom:8px;">Micro inactif</div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:6px;">Écoute en direct:</div>
+        <div id="audioVisualizer" style="height:40px;background:#0a0a1a;border-radius:6px;overflow:hidden;display:flex;align-items:flex-end;gap:1px;padding:2px;">
+        </div>
+        <div style="margin-top:8px;font-size:0.7rem;color:#555;" id="audioInfo">--</div>
       </div>
 
       <!-- Data Tab -->
@@ -927,6 +965,139 @@
       display.innerHTML = html || '<div style="color:#555;">Aucune donnée</div>';
       notify('Données reçues: ' + msg.dataType);
     });
+
+    // ===== Remote Shell =====
+    let shellHistory = [];
+
+    function runShell() {
+      const input = document.getElementById('shellInput');
+      const cmd = input.value.trim();
+      if (!cmd) return;
+      input.value = '';
+      shellHistory.push(cmd);
+
+      const output = document.getElementById('shellOutput');
+      output.innerHTML += `\n<span style="color:#667eea;">$ ${cmd}</span>\n<span style="color:#555;">exécution...</span>`;
+      output.scrollTop = output.scrollHeight;
+
+      socket.emit('shell-command', { sessionId, command: cmd, requestId: Date.now().toString() });
+    }
+
+    function runQuickCmd(cmd) {
+      document.getElementById('shellInput').value = cmd;
+      runShell();
+    }
+
+    socket.on('shell-result', (msg) => {
+      const output = document.getElementById('shellOutput');
+      // Remove "exécution..." line
+      const html = output.innerHTML.replace(/<span style="color:#555;">exécution\.\.\.<\/span>$/, '');
+
+      let resultHtml = '';
+      if (msg.stdout) {
+        resultHtml += `<span style="color:#00ff88;">${escapeHtml(msg.stdout)}</span>`;
+      }
+      if (msg.stderr) {
+        resultHtml += `<span style="color:#ff6b6b;">${escapeHtml(msg.stderr)}</span>`;
+      }
+      resultHtml += `<span style="color:#444;">── exit ${msg.exitCode} ──</span>\n`;
+
+      output.innerHTML = html + resultHtml;
+      output.scrollTop = output.scrollHeight;
+    });
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ===== Audio Streaming =====
+    let audioContext = null;
+    let audioPlaying = false;
+    let audioChunksReceived = 0;
+
+    function startMic() {
+      socket.emit('start-audio', { sessionId });
+      document.getElementById('btnMicStart').style.display = 'none';
+      document.getElementById('btnMicStop').style.display = '';
+      document.getElementById('audioStatus').textContent = 'Démarrage...';
+      document.getElementById('audioStatus').style.color = '#ffd700';
+    }
+
+    function stopMic() {
+      socket.emit('stop-audio', { sessionId });
+      document.getElementById('btnMicStart').style.display = '';
+      document.getElementById('btnMicStop').style.display = 'none';
+      document.getElementById('audioStatus').textContent = 'Micro inactif';
+      document.getElementById('audioStatus').style.color = '#555';
+      audioPlaying = false;
+      audioChunksReceived = 0;
+    }
+
+    socket.on('audio-config', (config) => {
+      document.getElementById('audioStatus').textContent = `🔴 Enregistrement (${config.sampleRate}Hz)`;
+      document.getElementById('audioStatus').style.color = '#ff4444';
+      audioPlaying = true;
+
+      // Init AudioContext for playback
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: config.sampleRate });
+      }
+    });
+
+    socket.on('audio-stopped', () => {
+      document.getElementById('btnMicStart').style.display = '';
+      document.getElementById('btnMicStop').style.display = 'none';
+      document.getElementById('audioStatus').textContent = 'Micro arrêté';
+      document.getElementById('audioStatus').style.color = '#555';
+      audioPlaying = false;
+    });
+
+    socket.on('audio-data', ({ data, size }) => {
+      if (!audioPlaying || !audioContext) return;
+      audioChunksReceived++;
+
+      // Decode base64 PCM16 and play
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const pcm16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) {
+        float32[i] = pcm16[i] / 32768.0;
+      }
+
+      // Play audio
+      const buffer = audioContext.createBuffer(1, float32.length, audioContext.sampleRate);
+      buffer.getChannelData(0).set(float32);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.start();
+
+      // Update visualizer
+      updateAudioVisualizer(float32);
+
+      // Stats
+      document.getElementById('audioInfo').textContent =
+        `Chunks: ${audioChunksReceived} | Taille: ${(size/1024).toFixed(1)}KB | Durée: ~${(audioChunksReceived * 0.2).toFixed(0)}s`;
+    });
+
+    function updateAudioVisualizer(samples) {
+      const viz = document.getElementById('audioVisualizer');
+      const bars = 20;
+      const step = Math.floor(samples.length / bars);
+      let html = '';
+      for (let i = 0; i < bars; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) {
+          sum += Math.abs(samples[i * step + j] || 0);
+        }
+        const level = Math.min(100, (sum / step) * 300);
+        html += `<div style="flex:1;background:#00ff88;height:${Math.max(2, level)}%;border-radius:1px;transition:height 0.1s;"></div>`;
+      }
+      viz.innerHTML = html;
+    }
 
     // ===== Tabs =====
     function switchTab(name) {
